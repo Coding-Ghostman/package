@@ -3,18 +3,13 @@ const common = require('oci-common');
 const conversationHistory = require('../utils/conversationHistory');
 
 // Configs
-const configFile = '~/.oci_conn/config';
-const configProfile = 'DEFAULT';
-const authenticationProvider =
-	new common.ConfigFileAuthenticationDetailsProvider(configFile, configProfile);
-
+// const configFile = '~/.oci_conn/config';
+// const configProfile = 'DEFAULT';
 // const authenticationProvider =
-// 	await common.ResourcePrincipalAuthenticationDetailsProvider.builder();
-const client = new genai.GenerativeAiInferenceClient({
-	authenticationDetailsProvider: authenticationProvider,
-});
+// 	new common.ConfigFileAuthenticationDetailsProvider(configFile, configProfile);
 // const compartmentId =
 // 	'ocid1.tenancy.oc1..aaaaaaaahqvb2kliqi35z57qalhpr4dyqbjprclszdcoar2wgc7q6nl36aba';
+
 const compartmentId =
 	'ocid1.compartment.oc1..aaaaaaaacdv3ig7yho6ebvdm6p5cdxq74pgnugeankt25mebpxoyhar2n4pa';
 
@@ -24,14 +19,19 @@ async function generateAIResponse(
 	logger,
 	context
 ) {
+	const authenticationProvider =
+		common.ResourcePrincipalAuthenticationDetailsProvider.builder();
+	const client = new genai.GenerativeAiInferenceClient({
+		authenticationDetailsProvider: authenticationProvider,
+	});
 	try {
 		const modelId = 'cohere.command-r-plus';
 		// const modelId = 'ocid1.generativeaimodel.oc1.eu-frankfurt-1.amaaaaaask7dceyaazssnpqc7g4rxwlvcfehpcfbtdvvkftz3jzz5pf4tenq';
 		const prompt = userMessage;
 		const conversationHistory = context.variable('user.conversationHistory');
-		const max_tokens = 1800;
+		const max_tokens = 600;
 		const temperature = 0;
-		const top_k = 0.7;
+		const top_k = 0.5;
 		const docs = [
 			{
 				title: 'Sick Leave',
@@ -71,6 +71,7 @@ async function generateAIResponse(
 			servingMode: serving_mode,
 			chatRequest: inference_request,
 		};
+
 		logger.info('CUSTOM_Check_GenAi: ', chatDetails);
 		const chatResponse = await client.chat({ chatDetails: chatDetails });
 		return chatResponse;
