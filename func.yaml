@@ -1,6 +1,6 @@
 schema_version: 20180708
 name: oda_genai_func
-version: 0.0.1
+version: 0.0.2
 runtime: node14
 build_image: fnproject/node:14-dev
 run_image: fnproject/node:14
