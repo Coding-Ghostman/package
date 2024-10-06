@@ -13,6 +13,8 @@
 	},
 	"repository": {},
 	"dependencies": {
+		"@oracle/bots-node-sdk": "^2.6.9",
+		"express": "^4.17.1",
 		"@fnproject/fdk": "^0.0.72",
 		"es6-promise": "^4.2.8",
 		"isomorphic-fetch": "^3.0.0",
@@ -24,6 +26,15 @@
 		"oci-identity": "^2.95.0"
 	},
 	"devDependencies": {
+		"@fnproject/fdk": "^0.0.72",
+		"es6-promise": "^4.2.8",
+		"isomorphic-fetch": "^3.0.0",
+		"jsrsasign": "^11.1.0",
+		"jsrsasign-util": "^1.0.5",
+		"nodemon": "^3.1.7",
+		"oci-common": "^2.95.0",
+		"oci-generativeaiinference": "^2.95.0",
+		"oci-identity": "^2.95.0",
 		"@oracle/bots-node-sdk": "^2.6.9",
 		"express": "^4.17.1"
 	},
@@ -31,6 +42,13 @@
 		"nodemon",
 		"oci-common",
 		"oci-generativeaiinference",
-		"oci-identity"
+		"oci-identity",
+		"@oracle/bots-node-sdk",
+		"express",
+		"@fnproject/fdk",
+		"es6-promise",
+		"isomorphic-fetch",
+		"jsrsasign",
+		"jsrsasign-util"
 	]
 }

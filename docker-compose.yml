@@ -1,9 +1,9 @@
 version: '3.3'
 services:
-  oda-cc-my-component-service:
+  oda-cc-common:
     build: .
-    image: 'oda-cc-my-component-service:1.0'
-    container_name: 'oda-cc-my-component-service'
+    image: 'oda-cc-common:1.0'
+    container_name: 'oda-cc-common'
     command: 'npm start'
     ports:
       - 3000:3000
