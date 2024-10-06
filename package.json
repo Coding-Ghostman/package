@@ -1,36 +1,36 @@
 {
-  "name": "cohere-genai-cc",
-  "version": "1.0.1",
-  "description": "Oracle Digital Assistant Component Package",
-  "main": "main.js",
-  "scripts": {
-    "bots-node-sdk": "bots-node-sdk",
-    "help": "npm run bots-node-sdk -- --help",
-    "prepack": "npm run bots-node-sdk -- pack --dry-run",
-    "start": "npm run bots-node-sdk -- service .",
-    "docker-build": "docker-compose build --force-rm --no-cache",
-    "dev": "nodemon --exec bots-node-sdk -- service ."
-  },
-  "repository": {},
-  "dependencies": {
-    "@fnproject/fdk": "^0.0.72",
-    "es6-promise": "^4.2.8",
-    "isomorphic-fetch": "^3.0.0",
-    "jsrsasign": "^11.1.0",
-    "jsrsasign-util": "^1.0.5",
-    "nodemon": "^3.1.7",
-    "oci-common": "^2.95.0",
-    "oci-generativeaiinference": "^2.95.0",
-    "oci-identity": "^2.95.0"
-  },
-  "devDependencies": {
-    "@oracle/bots-node-sdk": "^2.7.3",
-    "express": "^4.17.1"
-  },
-  "bundleDependencies": [
-    "nodemon",
-    "oci-common",
-    "oci-generativeaiinference",
-    "oci-identity"
-  ]
+	"name": "oda_genai_func",
+	"version": "0.0.2",
+	"description": "Oracle Digital Assistant Component Package",
+	"main": "main.js",
+	"scripts": {
+		"bots-node-sdk": "bots-node-sdk",
+		"help": "npm run bots-node-sdk -- --help",
+		"prepack": "npm run bots-node-sdk -- pack --dry-run",
+		"start": "npm run bots-node-sdk -- service .",
+		"docker-build": "docker-compose build --force-rm --no-cache",
+		"dev": "nodemon --exec bots-node-sdk -- service ."
+	},
+	"repository": {},
+	"dependencies": {
+		"@fnproject/fdk": "^0.0.72",
+		"es6-promise": "^4.2.8",
+		"isomorphic-fetch": "^3.0.0",
+		"jsrsasign": "^11.1.0",
+		"jsrsasign-util": "^1.0.5",
+		"nodemon": "^3.1.7",
+		"oci-common": "^2.95.0",
+		"oci-generativeaiinference": "^2.95.0",
+		"oci-identity": "^2.95.0"
+	},
+	"devDependencies": {
+		"@oracle/bots-node-sdk": "^2.6.9",
+		"express": "^4.17.1"
+	},
+	"bundleDependencies": [
+		"nodemon",
+		"oci-common",
+		"oci-generativeaiinference",
+		"oci-identity"
+	]
 }
