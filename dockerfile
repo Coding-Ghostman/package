@@ -8,9 +8,7 @@ WORKDIR /function
 COPY package*.json ./
 
 # Install the application dependencies
-RUN npm install && \
-    groupadd --gid 1000 fn && \
-    adduser --uid 1000 --gid fn fn
+RUN npm install
 
 # Copy the rest of the application code to the working directory
 ADD . /function/
