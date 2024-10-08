@@ -2,7 +2,7 @@ const common = require('oci-common');
 const fetch = require('node-fetch');
 const { Headers } = fetch;
 
-const configurationFilePath = '/usr/src/app/dmcc/config';
+const configurationFilePath = '/home/fn/.oci/config';
 const configProfile = 'DEFAULT';
 
 const provider = new common.ConfigFileAuthenticationDetailsProvider(

@@ -1,5 +1,5 @@
 # Use an official Node.js runtime as the base image
-FROM node:14
+FROM node:14 as build-stage
 
 # Set the working directory in the container
 WORKDIR /function
@@ -8,10 +8,18 @@ WORKDIR /function
 COPY package*.json ./
 
 # Install the application dependencies
-RUN npm install
+RUN npm install && \
+    groupadd --gid 1000 fn && \
+    adduser --uid 1000 --gid fn fn
 
 # Copy the rest of the application code to the working directory
 ADD . /function/
+
+RUN mkdir -p /home/fn/.oci
+
+COPY config /home/fn/.oci
+
+COPY private_key.pem /home/fn/.oci
 
 RUN chmod -R o+r /function
 # Expose the port that the app runs on
