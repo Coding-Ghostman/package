@@ -23,5 +23,6 @@ RUN chmod -R o+r /function
 # Expose the port that the app runs on
 EXPOSE 3000
 
+ENTRYPOINT ["node", "func.js"]
 # Define the command to run the application
 CMD ["npm", "start"]

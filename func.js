@@ -14,7 +14,7 @@ const COMPONENT_PREFIX = 'components/';
 
 let shell;
 let componentsRegistry;
-console.log('packagePath', packagePath);
+
 const getComponentsRegistry = function (packagePath) {
 	let registry = require(packagePath);
 	if (registry.components) {
