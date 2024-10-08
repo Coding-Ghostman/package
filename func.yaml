@@ -5,3 +5,4 @@ runtime: node
 build_image: fnproject/node:14-dev
 run_image: fnproject/node:14
 entrypoint: node func.js
+memory: 256
