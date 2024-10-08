@@ -13,10 +13,12 @@
 	},
 	"repository": {},
 	"dependencies": {
-		"@oracle/bots-node-sdk": "^2.6.9",
-		"express": "^4.17.1",
 		"@fnproject/fdk": "^0.0.72",
+		"@oracle/bots-node-sdk": "^2.6.9",
+		"axios": "^1.7.7",
+		"crypto-js": "^4.2.0",
 		"es6-promise": "^4.2.8",
+		"express": "^4.17.1",
 		"isomorphic-fetch": "^3.0.0",
 		"jsrsasign": "^11.1.0",
 		"jsrsasign-util": "^1.0.5",
@@ -27,16 +29,16 @@
 	},
 	"devDependencies": {
 		"@fnproject/fdk": "^0.0.72",
+		"@oracle/bots-node-sdk": "^2.6.9",
 		"es6-promise": "^4.2.8",
+		"express": "^4.17.1",
 		"isomorphic-fetch": "^3.0.0",
 		"jsrsasign": "^11.1.0",
 		"jsrsasign-util": "^1.0.5",
 		"nodemon": "^3.1.7",
 		"oci-common": "^2.95.0",
 		"oci-generativeaiinference": "^2.95.0",
-		"oci-identity": "^2.95.0",
-		"@oracle/bots-node-sdk": "^2.6.9",
-		"express": "^4.17.1"
+		"oci-identity": "^2.95.0"
 	},
 	"bundleDependencies": [
 		"nodemon",

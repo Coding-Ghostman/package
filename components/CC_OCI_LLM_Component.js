@@ -15,7 +15,6 @@ module.exports = {
 			if (context.getCurrentTurn() === 1 && context.isJsonValidationEnabled()) {
 				context.addJSONSchemaFormattingInstruction();
 			}
-			console.log('REQUEST:', context.getRequest());
 			return true;
 		},
 
@@ -26,16 +25,11 @@ module.exports = {
 		 * @returns {boolean} flag to indicate the validation was successful
 		 */
 		validateResponsePayload: async (event, context) => {
-			const response = context.convertToJSON(event.payload);
-			// Check if the response indicates more information is needed
-			if (
-				response.needMoreInfo &&
-				response.questionToAsk &&
-				!response.hasEnoughInfo
-			) {
-				context.addMessage(response.questionToAsk);
-				return false; // Indicate that validation is not complete
-			}
+			const response = event.payload;
+			console.log('RESPONSE:', response);
+			console.log('VALIDATION ENTITIES:', event.validationEntities);
+			console.log('ENTITY MATCHES:', JSON.stringify(event.entityMatches));
+			console.log('ALL VALIDATION ERRORS:', event.allValidationErrors);
 			return true;
 		},
 
@@ -47,7 +41,6 @@ module.exports = {
 		 */
 
 		changeBotMessages: async (event, context) => {
-			console.log('event.messages', event.messages);
 			return event.messages;
 		},
 

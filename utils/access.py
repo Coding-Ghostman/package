@@ -15,8 +15,8 @@ auth = Signer(
     private_key_file_location=config["key_file"],
     pass_phrase=config["pass_phrase"],
 )
-print(auth)
-endpoint = "https://inference.generativeai.us-chicago-1.oci.oraclecloud.com/20231130/actions/chat"
+print(config)
+endpoint = "https://inference.generativeai.eu-frankfurt-1.oci.oraclecloud.com/20231130/actions/chat"
 
 body = {
     "compartmentId": config["tenancy"],

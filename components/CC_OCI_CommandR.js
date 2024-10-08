@@ -1,11 +1,5 @@
 'use strict';
 
-// Documentation for writing LLM Transformation handlers: https://github.com/oracle/bots-node-sdk/blob/master/LLM_TRANSFORMATION_HANDLER.md
-
-// You can use your favorite http client package to make REST calls, however, the node fetch API is pre-installed with the bots-node-sdk.
-// Documentation can be found at https://www.npmjs.com/package/node-fetch
-// Un-comment the next line if you want to make REST calls using node-fetch.
-// const fetch = require("node-fetch");
 
 module.exports = {
 	metadata: {
@@ -23,9 +17,6 @@ module.exports = {
 		transformRequestPayload: async (event, context) => {
 			// NOTE: Depending on the Cohere version, this code might need to be updated
 			let messages = event.payload.messages;
-			console.log('*' * 100);
-			console.log('messages', messages);
-			console.log('*' * 100);
 			//get the last element in the message payload as the message to get an LLM answer for
 			let prompt = messages[messages.length - 1].content;
 			//remove the last element as it should no be part of the chat history
@@ -40,9 +31,6 @@ module.exports = {
 				}
 				return { message: item.content, role: role.toUpperCase() };
 			});
-			console.log('*' * 100);
-			console.log('chatHistory', chatHistory);
-			console.log('*' * 100);
 
 			// ChatHistory attribute in genai chat not expecting given chathistory from ODA. Temporary fix by appending chatHistory to prompt.
 			//if (messages.length > 1){
