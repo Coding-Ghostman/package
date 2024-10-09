@@ -1,16 +1,16 @@
-const common = require('oci-common');
-const fetch = require('node-fetch');
-const { Headers } = fetch;
-
-const configurationFilePath = '/home/fn/.oci/config';
-const configProfile = 'DEFAULT';
-
-const provider = new common.ConfigFileAuthenticationDetailsProvider(
-	configurationFilePath,
-	configProfile
-);
-
 async function chat(message, options = {}) {
+	const common = require('oci-common');
+	const fetch = require('node-fetch');
+	const { Headers } = fetch;
+
+	// const configurationFilePath = '/home/fn/.oci/config';
+	const configurationFilePath = '~/.oci_dmcc/config';
+	const configProfile = 'DEFAULT';
+
+	const provider = new common.ConfigFileAuthenticationDetailsProvider(
+		configurationFilePath,
+		configProfile
+	);
 	const {
 		chatHistory = [],
 		docs = [],
@@ -65,16 +65,20 @@ async function chat(message, options = {}) {
 		body: body,
 	};
 	// 3. sign request
+	console.log('****************************');
+	console.log('httpRequest', httpRequest);
+	console.log('****************************');
 	await signer.signHttpRequest(httpRequest);
 	// 4. Make the call
-	const response = await fetch(httpRequest.uri, {
+	let response = await fetch(httpRequest.uri, {
 		method: httpRequest.method,
 		headers: httpRequest.headers,
 		body: httpRequest.body,
 	});
-
+	response = await response.json();
+	console.log('response', response);
 	// 5. Return response
-	return await response.json();
+	return response;
 }
 
 module.exports = { chat };
