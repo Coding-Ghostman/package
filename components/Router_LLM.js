@@ -1,4 +1,5 @@
 const { chat } = require('../utils/chat');
+const moment = require('moment');
 
 module.exports = {
 	metadata: {
@@ -21,7 +22,7 @@ module.exports = {
 		1. Analyze the user query for information related to leave requests.
 		2. Consider the following parameters: leave type, start date, end date.
 		3. Start and End date are related to the leave dates i.e., the start and end dates. If Only one date is provided, consider it that both the start and end date are the same.
-		4. Respond ONLY with "Yes" or "No" or "cancel" or "confirmation.
+		4. Respond ONLY with "Yes" or "No" or "cancel" or "confirmation".
 		   - "Yes" if there is enough information to extract at least one parameter.
 		   - "No" if there is insufficient information to extract any parameter.
 			 - "cancel" if the user wants to cancel the leave request or asks questions outside the scope of the leave request.
@@ -32,7 +33,7 @@ module.exports = {
 		- If you're unsure about the information provided, respond with "No".
 		- Do not attempt to infer or guess missing information.
 
-		Remember: Your response must be ONLY "Yes" or "No". Do not provide any explanations or additional text.`.replace(
+		Remember: Your response must be ONLY "Yes", "No", "cancel", or "confirmation". Do not provide any explanations or additional text.`.replace(
 				/\\t/g,
 				''
 			);
