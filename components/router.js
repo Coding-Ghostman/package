@@ -208,8 +208,8 @@ async function handleFinalAction(ctxManager, action) {
 			// Reset the context for a new request
 			ctxManager.setExtractedInfo({});
 			ctxManager.setNullExtractedInfo({});
-			ctxManager.transition('');
 			ctxManager.keepTurn(false);
+			ctxManager.transition('');
 			done();
 			return;
 		} else if (confirmationResult === 'denied') {
@@ -284,7 +284,7 @@ ${extractedInfo.advanceSalary ? 'Advance Salary: Requested' : ''}
 
 Your request has been sent for approval. You'll be notified once it's processed. Is there anything else I can help you with?`;
 
-	return summary;
+	return sum;
 }
 
 async function handleInterruption(ctxManager, userMessage) {
