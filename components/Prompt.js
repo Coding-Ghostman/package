@@ -1,7 +1,7 @@
-const { chat } = require('../utils/chat');
-const ContextManager = require('./ContextManager');
-const CalendarTool = require('../utils/calendarTool');
-const leaveConfig = require('../utils/leaveConfig');
+const { chat } = require('/function/utils/chat');
+const ContextManager = require('/function/components/ContextManager');
+const CalendarTool = require('/function/utils/calendarTool');
+const leaveConfig = require('/function/utils/leaveConfig');
 
 module.exports = {
 	metadata: {

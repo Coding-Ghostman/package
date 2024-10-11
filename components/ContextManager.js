@@ -1,5 +1,5 @@
 const moment = require('moment');
-const leaveConfig = require('../utils/leaveConfig');
+const leaveConfig = require('/function/utils/leaveConfig');
 
 class ContextManager {
 	constructor(context) {

@@ -53,6 +53,7 @@
 		"es6-promise",
 		"isomorphic-fetch",
 		"jsrsasign",
-		"jsrsasign-util"
+		"jsrsasign-util",
+		"axios"
 	]
 }
