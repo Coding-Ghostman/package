@@ -1,6 +1,5 @@
 const { chat } = require('../utils/chat');
 const ContextManager = require('./ContextManager');
-const Extractor_LLM = require('./Extractor');
 
 
 module.exports = {
@@ -139,17 +138,6 @@ async function determineInitialAction(
 	return result;
 }
 
-
-
-async function handleExtraction(ctxManager) {
-	const logger = ctxManager.context.logger();
-	logger.info('handleExtraction: Started');
-
-	// Invoke the Extractor_LLM
-	await Extractor_LLM.invoke(ctxManager.context, () => {});
-
-	logger.info('handleExtraction: Completed');
-}
 
 async function determineFinalAction(ctxManager, currentAction) {
 	const logger = ctxManager.context.logger();
