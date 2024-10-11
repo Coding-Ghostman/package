@@ -10,7 +10,7 @@ module.exports = {
 			'prompt',
 			'confirmation',
 			'cancel',
-			'profileCheck',
+			'policy',
 		],
 	},
 	invoke: async (context, done) => {
@@ -70,6 +70,11 @@ module.exports = {
 			ctxManager.transition('extraction');
 			done();
 			return;
+		} else if (currentAction === 'policy') {
+			logger.info('Router: Handling policy search');
+			ctxManager.transition('policy');
+			done();
+			return;
 		}
 
 		// Step 5: Determine final action
@@ -108,7 +113,8 @@ async function determineInitialAction(
      - "cancel": if the user wants to cancel the current request or start over.
      - "interruption": if the user's query is unrelated to the leave request process or requires clarification before continuing.
      - "profileCheck": if the user is asking about their profile information or leave balance.
-		 - "policySearch": if the user is asking about the policy related to leave requests.
+		 - "policy": if the user is asking about the policy related to leave requests.
+
   Remember: Your response must be ONLY one of the above actions. Do not provide any explanations or additional text. We are handling only one leave request at a time.`;
 
 	const prompt = `User Query: ${userMessage}
@@ -189,18 +195,96 @@ async function determineFinalAction(ctxManager, currentAction) {
 async function handleFinalAction(ctxManager, action) {
 	const logger = ctxManager.context.logger();
 	logger.info(`handleFinalAction: Started with action - ${action}`);
-	ctxManager.keepTurn(true);
-	ctxManager.transition(action);
-	ctxManager.setPreviousAction(action);
 
-	if (action === 'cancel') {
+	if (action === 'confirmation') {
+		const confirmationResult = await checkConfirmation(ctxManager);
+		if (confirmationResult === 'confirmed') {
+			logger.info('handleFinalAction: User confirmed the leave request');
+			// Generate and send a summary of the leave request
+			const summary = generateLeaveSummary(ctxManager.getExtractedInfo());
+			ctxManager.reply(summary);
+			ctxManager.addToConversationHistory('CHATBOT', summary);
+			
+			// Reset the context for a new request
+			ctxManager.setExtractedInfo({});
+			ctxManager.setNullExtractedInfo({});
+			ctxManager.transition('');
+			ctxManager.keepTurn(false);
+			done();
+			return;
+		} else if (confirmationResult === 'denied') {
+			logger.info('handleFinalAction: User denied the leave request');
+			ctxManager.reply("I understand you don't want to proceed with this leave request. Is there anything else I can help you with?");
+			ctxManager.transition('router');
+		} else {
+			logger.info('handleFinalAction: Confirmation unclear, asking for clarification');
+			ctxManager.transition('confirmation');
+		}
+	} else if (action === 'cancel') {
 		logger.info('handleFinalAction: Cancelling, resetting extracted info');
 		ctxManager.setExtractedInfo({});
 		ctxManager.setNullExtractedInfo({});
+		ctxManager.reply("I've cancelled your current leave request. Is there anything else I can help you with?");
+		ctxManager.transition('router');
+	} else {
+		ctxManager.transition(action);
 	}
 
+	ctxManager.setPreviousAction(action);
 	ctxManager.addToConversationHistory('SYSTEM', `Routed to ${action}`);
+	ctxManager.keepTurn(true);
 	logger.info('handleFinalAction: Completed');
+}
+
+async function checkConfirmation(ctxManager) {
+	const logger = ctxManager.context.logger();
+	logger.info('checkConfirmation: Started');
+
+	const userMessage = ctxManager.getUserMessage();
+	const extractedInfo = ctxManager.getExtractedInfo();
+
+	const confirmationPreamble = `You are an AI assistant processing a leave request confirmation. Your task is to determine if the user has confirmed, denied, or if their response is unclear.
+
+	Instructions:
+	1. Analyze the user's response to the leave request summary.
+	2. Determine if the user has clearly confirmed, denied, or if their response is unclear.
+	3. Respond ONLY with one of the following:
+	   - "confirmed": if the user has clearly agreed to submit the leave request.
+	   - "denied": if the user has clearly indicated they do not want to proceed.
+	   - "unclear": if the user's response is ambiguous or requires further clarification.
+
+	Remember: Your response must be ONLY one of the above options. Do not provide any explanations or additional text.`;
+
+	const confirmationPrompt = `User Response: ${userMessage}
+	Leave Request Details: ${JSON.stringify(extractedInfo)}
+
+	Based on the user's response, determine if they have confirmed, denied, or if their response is unclear regarding the leave request.`;
+
+	const response = await chat(confirmationPrompt, {
+		maxTokens: 50,
+		temperature: 0,
+		preambleOverride: confirmationPreamble,
+	});
+
+	const result = response.chatResponse.text.toLowerCase().trim();
+	logger.info(`checkConfirmation: Completed with result - ${result}`);
+	return result;
+}
+
+function generateLeaveSummary(extractedInfo) {
+	// Generate a summary of the leave request
+	const summary = `Great! I've submitted your leave request. Here's a summary:
+
+Leave Type: ${extractedInfo.leaveType}
+Start Date: ${extractedInfo.startDate}
+End Date: ${extractedInfo.endDate}
+${extractedInfo.workingDays ? `Working Days: ${extractedInfo.workingDays}` : ''}
+${extractedInfo.leaveDestination ? `Destination: ${extractedInfo.leaveDestination}` : ''}
+${extractedInfo.advanceSalary ? 'Advance Salary: Requested' : ''}
+
+Your request has been sent for approval. You'll be notified once it's processed. Is there anything else I can help you with?`;
+
+	return summary;
 }
 
 async function handleInterruption(ctxManager, userMessage) {
@@ -209,7 +293,6 @@ async function handleInterruption(ctxManager, userMessage) {
 
 	const extractedInfo = ctxManager.getExtractedInfo();
 	const oldLeaveType = extractedInfo.leaveType;
-
 
 	const updatedExtractedInfo = ctxManager.getExtractedInfo();
 	const newLeaveType = updatedExtractedInfo.leaveType;
