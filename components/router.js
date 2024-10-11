@@ -1,6 +1,6 @@
-const { chat } = require('/function/utils/chat');
-const ContextManager = require('/function/components/ContextManager');
-const Extractor_LLM = require('/function/components/Extractor');
+const { chat } = require('../utils/chat');
+const ContextManager = require('./ContextManager');
+const Extractor_LLM = require('./Extractor');
 
 
 module.exports = {

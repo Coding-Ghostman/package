@@ -1,5 +1,5 @@
-const { chat } = require('/function/utils/chat');
-const ContextManager = require('/function/components/ContextManager');
+const { chat } = require('../utils/chat');
+const ContextManager = require('../components/ContextManager');
 
 module.exports = {
 	metadata: {
