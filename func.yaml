@@ -1,6 +1,6 @@
 schema_version: 20180708
-name: oda_genai_func
-version: 0.0.2
+name: oda_genai_func_v2
+version: 0.0.3
 runtime: docker
 entrypoint: node func.js
 memory: 256

@@ -41,7 +41,7 @@ Important:
 - Handle one leave request at a time.
 - Keep responses under 20 words.
 - Avoid using phrases like "Confirm, tweak, or nix".
-- Consider the user's profile, especially their department, position, and leave balance when generating prompts.
+- Consider the user's profile if it is relevant to the context when generating prompts.
 
 Remember: Never imply or assume a leave type or any other information that isn't in the extracted info or user profile.
 `.replace(/\\t/g, '');
@@ -63,6 +63,9 @@ Remember: Never imply or assume a leave type or any other information that isn't
 		}
 
 		const prompt = `
+${promptPreambleOverride}
+
+
 User Query: ${userMessage}
 Extracted Info: ${JSON.stringify(extractedInfo)}
 Missing Mandatory Params: ${JSON.stringify(missingMandatoryParams)}

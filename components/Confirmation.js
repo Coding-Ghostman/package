@@ -72,6 +72,9 @@ Generate a brief, friendly confirmation message for the leave request based on t
 		);
 		ctxManager.setTestResponse(chatResponse.chatResponse.text);
 		ctxManager.reply(chatResponse.chatResponse.text);
+		
+		// Clear extractedInfo after sending the confirmation message
+		ctxManager.setExtractedInfo({});
 
 		// Transition based on user's response
 		if (
