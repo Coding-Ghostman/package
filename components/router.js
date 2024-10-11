@@ -1,12 +1,17 @@
 const { chat } = require('../utils/chat');
 const ContextManager = require('./ContextManager');
 
-
 module.exports = {
 	metadata: {
 		name: 'router_v3',
 		properties: {},
-		supportedActions: ['extraction', 'prompt', 'confirmation', 'cancel', 'profileCheck'],
+		supportedActions: [
+			'extraction',
+			'prompt',
+			'confirmation',
+			'cancel',
+			'profileCheck',
+		],
 	},
 	invoke: async (context, done) => {
 		const logger = context.logger();
@@ -47,7 +52,10 @@ module.exports = {
 		// Step 3: Handle interruption
 		if (initialAction === 'interruption') {
 			logger.info('Router: Handling interruption');
-			const interruptionResponse = await handleInterruption(ctxManager, userMessage);
+			const interruptionResponse = await handleInterruption(
+				ctxManager,
+				userMessage
+			);
 			ctxManager.reply(interruptionResponse);
 			ctxManager.addToConversationHistory('CHATBOT', interruptionResponse);
 			ctxManager.transition('router');
@@ -100,7 +108,7 @@ async function determineInitialAction(
      - "cancel": if the user wants to cancel the current request or start over.
      - "interruption": if the user's query is unrelated to the leave request process or requires clarification before continuing.
      - "profileCheck": if the user is asking about their profile information or leave balance.
-
+		 - "policySearch": if the user is asking about the policy related to leave requests.
   Remember: Your response must be ONLY one of the above actions. Do not provide any explanations or additional text. We are handling only one leave request at a time.`;
 
 	const prompt = `User Query: ${userMessage}
@@ -137,7 +145,6 @@ async function determineInitialAction(
 	logger.info(`determineInitialAction: Completed with result - ${result}`);
 	return result;
 }
-
 
 async function determineFinalAction(ctxManager, currentAction) {
 	const logger = ctxManager.context.logger();
@@ -203,25 +210,30 @@ async function handleInterruption(ctxManager, userMessage) {
 	const extractedInfo = ctxManager.getExtractedInfo();
 	const oldLeaveType = extractedInfo.leaveType;
 
-	// Invoke the Extractor_LLM to check for any new information
-	await Extractor_LLM.invoke(ctxManager.context, () => {});
 
 	const updatedExtractedInfo = ctxManager.getExtractedInfo();
 	const newLeaveType = updatedExtractedInfo.leaveType;
 
 	// Check if the leave type has changed
 	if (newLeaveType && newLeaveType !== oldLeaveType) {
-		logger.info(`handleInterruption: Leave type changed from ${oldLeaveType} to ${newLeaveType}`);
-		
+		logger.info(
+			`handleInterruption: Leave type changed from ${oldLeaveType} to ${newLeaveType}`
+		);
+
 		// Reset extracted info and populate with new leave type parameters
 		ctxManager.setExtractedInfo({ leaveType: newLeaveType });
 		ctxManager.setNullExtractedInfo({});
 		const result = ctxManager.populateLeaveTypeParams(newLeaveType);
-		
+
 		if (result) {
-			logger.info('handleInterruption: Updated extracted info with new leave type parameters', result.extractedInfo);
+			logger.info(
+				'handleInterruption: Updated extracted info with new leave type parameters',
+				result.extractedInfo
+			);
 		} else {
-			logger.warn(`handleInterruption: Unable to populate parameters for ${newLeaveType}`);
+			logger.warn(
+				`handleInterruption: Unable to populate parameters for ${newLeaveType}`
+			);
 		}
 	}
 
@@ -249,7 +261,10 @@ async function handleInterruption(ctxManager, userMessage) {
 		preambleOverride: interruptionPreamble,
 	});
 
-	logger.info('handleInterruption: Generated response', interruptionResponse.chatResponse.text);
+	logger.info(
+		'handleInterruption: Generated response',
+		interruptionResponse.chatResponse.text
+	);
 	return interruptionResponse.chatResponse.text;
 }
 
@@ -277,8 +292,14 @@ async function handleProfileCheck(ctxManager, userProfile) {
 		preambleOverride: profileCheckPreamble,
 	});
 
-	logger.info('handleProfileCheck: Generated response', profileCheckResponse.chatResponse.text);
+	logger.info(
+		'handleProfileCheck: Generated response',
+		profileCheckResponse.chatResponse.text
+	);
 	ctxManager.reply(profileCheckResponse.chatResponse.text);
-	ctxManager.addToConversationHistory('CHATBOT', profileCheckResponse.chatResponse.text);
+	ctxManager.addToConversationHistory(
+		'CHATBOT',
+		profileCheckResponse.chatResponse.text
+	);
 	logger.info('handleProfileCheck: Completed');
 }
