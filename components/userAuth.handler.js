@@ -19,6 +19,7 @@ module.exports = {
 		let { userId, oicUsername, oicPassword, fusionUsername, fusionPassword } =
 			context.properties();
 		const logger = context.logger();
+		
 		if (userId.length > 6) {
 			userId = 104608;
 		}

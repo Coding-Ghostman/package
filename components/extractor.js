@@ -100,7 +100,7 @@ Extract ONLY the explicitly mentioned leave request information based on the giv
 		logger.info('Extractor: Null info', nullInfo);
 		ctxManager.setNullExtractedInfo(nullInfo);
 
-		// If leave type is present, populate parameters and run extraction again
+		// After extraction logic
 		if (mergedData.leaveType && !mergedData.paramsPopulated) {
 			logger.info(
 				`Extractor: Populating parameters for ${mergedData.leaveType}`
@@ -123,8 +123,10 @@ Extract ONLY the explicitly mentioned leave request information based on the giv
 				ctxManager.setExtractedInfo(updatedExtractedInfo);
 				ctxManager.setNullExtractedInfo(updatedNullExtractedInfo);
 
-				// Run extraction again with updated parameters
-				await module.exports.invoke(context, () => {}, userProfile);
+				// Transition back to extraction for another round
+				ctxManager.transition('extraction');
+				done();
+				return;
 			} else {
 				logger.warn(
 					`Extractor: Unable to populate parameters for ${mergedData.leaveType}`
@@ -132,11 +134,8 @@ Extract ONLY the explicitly mentioned leave request information based on the giv
 			}
 		}
 
-		ctxManager.keepTurn(true);
-		ctxManager.transition('router');
-
-		ctxManager.addToConversationHistory('SYSTEM', 'Information extracted');
-
+		// If extraction is complete, transition to prompt
+		ctxManager.transition('prompt');
 		done();
 	},
 };

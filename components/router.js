@@ -45,58 +45,32 @@ module.exports = {
 			return;
 		}
 
-		// Step 3: Handle extraction if needed
+		// Step 3: Handle interruption
+		if (initialAction === 'interruption') {
+			logger.info('Router: Handling interruption');
+			const interruptionResponse = await handleInterruption(ctxManager, userMessage);
+			ctxManager.reply(interruptionResponse);
+			ctxManager.addToConversationHistory('CHATBOT', interruptionResponse);
+			ctxManager.transition('router');
+			done();
+			return;
+		}
+
+		// Step 4: Handle extraction if needed
 		let currentAction = initialAction;
 		if (currentAction === 'extraction' || currentAction === 'prompt') {
 			logger.info('Router: Handling extraction');
-			await handleExtraction(ctxManager);
-
-			// Check if leaveType was extracted and populate parameters
-			const extractedInfo = ctxManager.getExtractedInfo();
-			logger.info('Router: 2nd Extraction: Extracted Info', extractedInfo);
-			if (extractedInfo.leaveType && !extractedInfo.paramsPopulated) {
-				logger.info(
-					`Router: Populating parameters for ${extractedInfo.leaveType}`
-				);
-				const result = ctxManager.populateLeaveTypeParams(
-					extractedInfo.leaveType
-				);
-				logger.info('Router: 2nd Extraction: Result', result);
-
-				if (result) {
-					const {
-						extractedInfo: updatedExtractedInfo,
-						nullExtractedInfo: updatedNullExtractedInfo,
-					} = result;
-
-					logger.info('Router: Updated Extracted Info', updatedExtractedInfo);
-					logger.info(
-						'Router: Updated Null Extracted Info',
-						updatedNullExtractedInfo
-					);
-
-					updatedExtractedInfo.paramsPopulated = true;
-					ctxManager.setExtractedInfo(updatedExtractedInfo);
-					ctxManager.setNullExtractedInfo(updatedNullExtractedInfo);
-
-					logger.info('Router: 3rd Extraction: Handling extraction');
-					await handleExtraction(ctxManager);
-				} else {
-					logger.warn(
-						`Router: Unable to populate parameters for ${extractedInfo.leaveType}`
-					);
-				}
-			}
-
-			currentAction = 'prompt'; // After extraction, we always prompt
+			ctxManager.transition('extraction');
+			done();
+			return;
 		}
 
-		// Step 4: Determine final action
+		// Step 5: Determine final action
 		logger.info('Router: Determining final action');
 		const finalAction = await determineFinalAction(ctxManager, currentAction);
 		logger.info(`Router: Final determined action - ${finalAction}`);
 
-		// Step 5: Handle the final action
+		// Step 6: Handle the final action
 		logger.info(`Router: Handling final action - ${finalAction}`);
 		await handleFinalAction(ctxManager, finalAction);
 
@@ -118,14 +92,14 @@ async function determineInitialAction(
 	const routingPreamble = `You are an intelligent Routing Assistant for a HRMS Leave Management Framework. Your task is to determine the next action based on the user query, extracted information, and user profile for a single leave request.
 
   Instructions:
-  1. Analyze the user query for information related to the current leave request or user profile inquiries.
+  1. Analyze the user query for information related to the current leave request, user profile inquiries, or potential interruptions.
   2. Consider the following parameters: leave type, start date, end date, and user profile information.
   3. Respond ONLY with one of the following actions:
      - "extraction": if there is new information to extract or update for the current request.
      - "prompt": if more information is needed from the user for the current request.
-     - "confirmation": if all necessary information is present (leave type, start date, and end date) and ready for confirmation.
+     - "confirmation": if all necessary information is present and ready for confirmation.
      - "cancel": if the user wants to cancel the current request or start over.
-     - "interruption": if the user's query is unrelated to the leave request process (e.g., asking for a joke, general questions).
+     - "interruption": if the user's query is unrelated to the leave request process or requires clarification before continuing.
      - "profileCheck": if the user is asking about their profile information or leave balance.
 
   Remember: Your response must be ONLY one of the above actions. Do not provide any explanations or additional text. We are handling only one leave request at a time.`;
@@ -136,7 +110,7 @@ async function determineInitialAction(
     Previous Action: ${previousAction}
     User Profile: ${JSON.stringify(userProfile)}
 
-  Based on the user query, extracted information, previous action, user profile, and conversation history, determine the next action for the current leave request or user profile inquiry.`;
+  Based on the user query, extracted information, previous action, user profile, and conversation history, determine the next action for the current leave request, user profile inquiry, or potential interruption.`;
 
 	logger.info('determineInitialAction: Sending chat request');
 	const response = await chat(prompt, {
