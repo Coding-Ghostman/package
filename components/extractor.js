@@ -1,104 +1,193 @@
 const { chat } = require('../utils/chat');
-const { storeConversationHistory } = require('../utils/conversationHistory');
+const ContextManager = require('./ContextManager');
+const CalendarTool = require('../utils/calendarTool');
+const leaveConfig = require('../utils/leaveConfig');
 
 module.exports = {
 	metadata: {
-		name: 'extractor',
+		name: 'extractor_v3',
 		properties: {},
 		supportedActions: ['router', 'prompt'],
 	},
 	invoke: async (context, done) => {
 		const logger = context.logger();
-		const currentAction = context.variable('currentAction');
-		const userMessage = context.getUserMessage();
-		console.log('Extractor: Current action', currentAction);
-		console.log('Extractor: User message', userMessage);
+		logger.info('Extractor: Invoked');
 
-		let extractedInfo = JSON.parse(context.variable('extractedInfo')) || {};
-		const preambleOverride = `You are an AI assistant for an HRMS Leave Management system. Extract the requested information from the user's message. Respond ONLY in the specified JSON format, without any additional text or formatting. JSON format: {"leavePlanType": "extracted type or null", "leaveDates": {"startDate": "YYYY-MM-DD or null", "endDate": "YYYY-MM-DD or null}}`;
+		const ctxManager = new ContextManager(context);
+		const userMessage = ctxManager.getUserMessage();
+		const userProfile = ctxManager.getUserProfile();
+		const calendarTool = new CalendarTool();
+		const dateInfo = calendarTool.interpretDateQuery(userMessage);
+		logger.info('Extractor: Date interpretation', dateInfo);
+		const existingData = ctxManager.getExtractedInfo();
+		logger.info('Extractor: Existing data', existingData);
+		logger.info('Extractor: User Message', userMessage);
+		logger.info('Extractor: User Profile', userProfile);
 
-		let promptForLLM;
-		switch (currentAction) {
-			case 'extractLeavePlanType':
-				promptForLLM =
-					'Extract the leave type (Annual Leave, Sick Leave, or Remote Working leave) from the user\'s message. If not found, return null. Format: {"leavePlanType": "extracted type or null"}';
-				break;
-			case 'extractLeaveDates':
-				promptForLLM =
-					'Extract the start and end dates for the leave request. If not found, return null for missing dates. Format: {"startDate": "YYYY-MM-DD or null", "endDate": "YYYY-MM-DD or null"}';
-				break;
+		const extractionPreambleOverride = generateExtractionPreamble(
+			existingData,
+			userProfile
+		);
+
+		const prompt = `
+User Query: ${userMessage}
+Date Interpretation: ${JSON.stringify(dateInfo)}
+Existing Information: ${JSON.stringify(existingData)}
+User Profile: ${JSON.stringify(userProfile)}
+
+Extract ONLY the explicitly mentioned leave request information based on the given instructions. Do NOT include any information that is not explicitly stated in the user's query. Consider the user's profile when extracting information.`;
+
+		const chatResponse = await chat(prompt, {
+			maxTokens: 600,
+			temperature: 0,
+			docs: [
+				{
+					title: 'Sick',
+					text: 'Used if the employee is unable to attend work due to a medical reason, such as they are ill, or have to attend a medical appointment',
+				},
+				{
+					title: 'Annual',
+					text: 'The employee can take annual leave at their discretion without giving a particular reason. The purpose is simply to give them a break from work. This time might also be referred to as vacation, Personal Time Off (PTO), or annual leave.',
+				},
+				{
+					title: 'Remote',
+					text: 'Used if the employee wishes to have some time working outside of the office - for example working from home, or another remote location.',
+				},
+			],
+			preambleOverride: extractionPreambleOverride,
+			chatHistory: ctxManager.getConversationHistory(),
+		});
+
+		let extractedData = JSON.parse(
+			chatResponse.chatResponse.text
+				.replace(/`/g, '')
+				.replace('json', '')
+				.replace(/\\n/g, '')
+				.trim()
+		);
+		logger.info('Extractor: Raw extracted data', extractedData);
+
+		// Post-processing step to remove any potentially assumed dates
+		// const extractedData = removeAssumedDates(extractedData, userMessage);
+		logger.info('Extractor: Cleaned extracted data', extractedData);
+
+		// Modify the merging process
+		const mergedData = { ...existingData };
+		Object.keys(extractedData).forEach((key) => {
+			if (extractedData[key] !== null) {
+				mergedData[key] = extractedData[key];
+			}
+		});
+
+		logger.info('Extractor: Merged data', mergedData);
+
+		// Calculate working days only if both dates are present
+		if (mergedData.startDate && mergedData.endDate) {
+			mergedData.workingDays = calendarTool.getWorkingDays(
+				mergedData.startDate,
+				mergedData.endDate
+			);
 		}
 
-		try {
-			const chatResponse = await chat(userMessage.text, {
-				maxTokens: 100,
-				temperature: 0,
-				topP: 0.1,
-				topK: 1,
-				preambleOverride,
-				promptForLLM,
-			});
+		// Update the context with the merged data
+		ctxManager.setExtractedInfo(mergedData);
 
-			console.log(
-				'Extractor: Chat response: ',
-				chatResponse.chatResponse.text
-					.replace(/`/g, '')
-					.replace('json', '')
-					.replace(/\\n/g, '')
-					.trim()
+		// Update null extracted info
+		const nullInfo = { ...ctxManager.getNullExtractedInfo() };
+		Object.keys(extractedData).forEach((key) => {
+			nullInfo[key] = extractedData[key] === null;
+		});
+		logger.info('Extractor: Null info', nullInfo);
+		ctxManager.setNullExtractedInfo(nullInfo);
+
+		// If leave type is present, populate parameters and run extraction again
+		if (mergedData.leaveType && !mergedData.paramsPopulated) {
+			logger.info(
+				`Extractor: Populating parameters for ${mergedData.leaveType}`
 			);
+			const result = ctxManager.populateLeaveTypeParams(mergedData.leaveType);
 
-			let extractedData = JSON.parse(
-				chatResponse.chatResponse.text
-					.replace(/`/g, '')
-					.replace('json', '')
-					.replace(/\\n/g, '')
-					.trim()
-			);
-			console.log('Extractor: Extracted data', extractedData);
+			if (result) {
+				const {
+					extractedInfo: updatedExtractedInfo,
+					nullExtractedInfo: updatedNullExtractedInfo,
+				} = result;
 
-			let isInformationExtracted = false;
-			switch (currentAction) {
-				case 'extractLeavePlanType':
-					if (
-						extractedData.leavePlanType &&
-						extractedData.leavePlanType !== 'null'
-					) {
-						extractedInfo['leavePlanType'] = extractedData.leavePlanType;
-						isInformationExtracted = true;
-					}
-					break;
-				case 'extractLeaveDates':
-					if (
-						extractedData.leaveDates &&
-						extractedData.leaveDates.startDate !== 'null' &&
-						extractedData.leaveDates.endDate !== 'null'
-					) {
-						extractedInfo['leaveDates'] = extractedData.leaveDates;
-						isInformationExtracted = true;
-					}
-					break;
-			}
-			console.log(
-				'Extractor: Updated extracted info (before stringify)',
-				extractedInfo
-			);
+				logger.info('Extractor: Updated Extracted Info', updatedExtractedInfo);
+				logger.info(
+					'Extractor: Updated Null Extracted Info',
+					updatedNullExtractedInfo
+				);
 
-			context.setVariable('extractedInfo', JSON.stringify(extractedInfo));
-			console.log('Extractor: Updated extracted info', extractedInfo);
+				updatedExtractedInfo.paramsPopulated = true;
+				ctxManager.setExtractedInfo(updatedExtractedInfo);
+				ctxManager.setNullExtractedInfo(updatedNullExtractedInfo);
 
-			if (isInformationExtracted) {
-				context.keepTurn(true);
-				context.transition('router');
+				// Run extraction again with updated parameters
+				await module.exports.invoke(context, () => {}, userProfile);
 			} else {
-				context.keepTurn(true);
-				context.transition('prompt');
+				logger.warn(
+					`Extractor: Unable to populate parameters for ${mergedData.leaveType}`
+				);
 			}
-		} catch (error) {
-			logger.error('Extractor: Chat failed with error', error);
-			context.keepTurn(true);
-			context.transition('prompt');
 		}
+
+		ctxManager.keepTurn(true);
+		ctxManager.transition('router');
+
+		ctxManager.addToConversationHistory('SYSTEM', 'Information extracted');
+
 		done();
 	},
 };
+
+function generateExtractionPreamble(existingData, userProfile) {
+	let preamble = `You are an AI assistant for an HRMS Leave Management system. Your task is to extract ONLY explicitly mentioned information from the user's query about a single leave request. Do not make any assumptions or inferences.
+
+	INSTRUCTIONS: WHILE HANDLING DATES CONSIDER ONLY THE WORKING DAYS i.e. MONDAY TO FRIDAY. IF THE USER IS ASKING TO TAKE LEAVE ON A WEEKEND, IGNORE THE REQUEST.
+
+	IMPORTANT: DO NOT CREATE NEW KEY FIELDS (RESTRICTED TO EXISTING KEYS).
+	IMPORTANT: HANDLE THE CASES WHERE THE USER MENTIONS THE SAME DATE FOR START AND END DATES.
+	IMPORTANT: HANDLE THE CASE WHERE THE USER MIGHT BE ASKING FOR HALF DAY LEAVE.
+	IMPORTANT: IF THE USER IS ASKING TO TAKE HALF DAY LEAVE, CHECK THE START DAY TYPE AND END DAY TYPE PARAMETERS. UPDATE THEM ACCORDINGLY. TRUE FOR FULL DAY, FALSE FOR HALF DAY.
+	IMPORTANT: CONSIDER THE USER'S PROFILE WHEN EXTRACTING INFORMATION, ESPECIALLY FOR LEAVE TYPES AND DESTINATIONS.
+
+	Extract ONLY the following parameters if EXPLICITLY mentioned:
+
+	1. Leave Type: The type of leave requested (e.g., Annual Leave, Sick Leave, Remote Working).
+	2. Start Date: The start date of the leave in YYYY-MM-DD format, ONLY if explicitly stated.
+	3. End Date: The end date of the leave in YYYY-MM-DD format, ONLY if explicitly stated.
+	4. Start Day Type: Whether the start date is a full day or half day, ONLY if explicitly mentioned.
+	5. End Day Type: Whether the end date is a full day or half day, ONLY if explicitly mentioned.
+
+	IF NO PARAMETERS ARE EXPLICITLY MENTIONED, JUST PROVIDE AN EMPTY JSON OBJECT i.e. {}.
+
+
+
+	User Profile:
+	${JSON.stringify(userProfile)}
+	`;
+
+	console.log('Extractor: Existing leave type', existingData);
+	if (existingData.leaveType) {
+		const leaveTypeConfig = leaveConfig[existingData.leaveType];
+		if (leaveTypeConfig) {
+			preamble +=
+				'\n\nAdditional parameters for ' + existingData.leaveType + ':';
+			leaveTypeConfig.mandatoryParams.forEach((param) => {
+				if (param.name !== 'startDate' && param.name !== 'endDate') {
+					preamble += `\n- ${param.name}: ${param.description}`;
+				}
+			});
+			leaveTypeConfig.optionalParams.forEach((param) => {
+				preamble += `\n- ${param.name}: ${param.description}`;
+			});
+		}
+	}
+
+	preamble += `\n\nRespond with the extracted information in JSON format. Include ONLY the fields that are explicitly mentioned in the user's query. Do not include any assumed or inferred information. Use CamelCase for the keys.
+
+	IMPORTANT: Do NOT assume or infer any dates or information. Only extract what is explicitly stated in the user's message.`;
+
+	return preamble;
+}
