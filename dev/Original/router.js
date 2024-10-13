@@ -11,7 +11,6 @@ module.exports = {
 			'confirmation',
 			'cancel',
 			'policy',
-			'summary',
 		],
 	},
 	invoke: async (context, done) => {
@@ -169,9 +168,9 @@ async function determineFinalAction(ctxManager, currentAction) {
 
 			if (missingMandatoryParams.length === 0 && currentAction !== 'cancel') {
 				logger.info(
-					'determineFinalAction: All mandatory info present, returning summary'
+					'determineFinalAction: All mandatory info present, returning confirmation'
 				);
-				return 'summary';
+				return 'confirmation';
 			}
 		}
 	}

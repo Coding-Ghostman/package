@@ -15,29 +15,28 @@ module.exports = {
 		const userMessage = ctxManager.getUserMessage();
 		const extractedInfo = ctxManager.getExtractedInfo();
 
-		const cancelPreamble = `
-You are an AI assistant for an HRMS Leave Management system. Your task is to handle the cancellation of a leave request or the current leave application process.
+		const cancelPreambleOverride = `
+You are an AI assistant for an HRMS Leave Management system. Your task is to ask for confirmation before cancelling a leave request. Be concise, professional, and friendly.
 
 Instructions:
-1. Confirm the user's intention to cancel.
-2. If cancelling an ongoing application, summarize what will be discarded.
-3. If cancelling a submitted request, explain the cancellation process.
-4. Provide a brief, friendly response acknowledging the cancellation.
-5. Keep the response under 40 words.
+1. Ask the user to confirm if they want to cancel their leave request.
+2. Do not assume or mention any specific leave types or details.
+3. Do not process the cancellation yet.
+4. Keep the response under 20 words.
+5. Only ask for confirmation, do not provide any other information or options.
 6. Use a conversational tone, as if a friendly HR representative is speaking.
-`;
+`.replace(/\\t/g, '');
 
 		const prompt = `
 User Message: ${userMessage}
-Extracted Info: ${JSON.stringify(extractedInfo)}
 
-Generate a brief, friendly response handling the cancellation of the leave request or application process.
-`;
+Generate a brief, friendly response asking for confirmation to cancel the leave request.
+`.replace(/\\t/g, '');
 
 		const chatResponse = await chat(prompt, {
-			maxTokens: 150,
+			maxTokens: 100,
 			temperature: 0.7,
-			preambleOverride: cancelPreamble,
+			preambleOverride: cancelPreambleOverride,
 			chatHistory: ctxManager.getConversationHistory(),
 		});
 
@@ -48,12 +47,13 @@ Generate a brief, friendly response handling the cancellation of the leave reque
 		ctxManager.setTestResponse(chatResponse.chatResponse.text);
 		ctxManager.reply(chatResponse.chatResponse.text);
 
-		// Clear extracted info and conversation history
 		ctxManager.setExtractedInfo({});
 		ctxManager.setNullExtractedInfo({});
+
+		// Clear the conversation history
 		ctxManager.clearConversationHistory();
 
-		// Transition back to the router
+		// Always transition back to the router after cancellation
 		ctxManager.transition('router');
 
 		done();

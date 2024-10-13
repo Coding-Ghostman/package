@@ -2,12 +2,13 @@ const { chat } = require('../utils/chat');
 const ContextManager = require('./ContextManager');
 const moment = require('moment');
 const leaveConfig = require('../utils/leaveConfig');
+const { submitLeaveRequest } = require('../utils/leaveRequestSubmission');
 
 module.exports = {
 	metadata: {
 		name: 'confirmation_v3',
 		properties: {},
-		supportedActions: ['router', 'cancel'],
+		supportedActions: ['router', 'cancel'], 
 	},
 	invoke: async (context, done) => {
 		const logger = context.logger();
@@ -28,26 +29,21 @@ module.exports = {
 		const formattedStartDate = formatDate(extractedInfo.startDate);
 		const formattedEndDate = formatDate(extractedInfo.endDate);
 
-		// Get mandatory parameters for the leave type
 		const leaveTypeConfig = leaveConfig[extractedInfo.leaveType];
 		const mandatoryParams = leaveTypeConfig
 			? leaveTypeConfig.mandatoryParams
 			: [];
 
-		const confirmationPreambleOverride = `
-You are an AI assistant for an HRMS Leave Management system. Your task is to generate a confirmation message for the user's leave request and ask for their final approval. Make the message conversational and natural, as if a friendly HR representative is speaking.
+		const confirmationPreamble = `
+You are an AI assistant for an HRMS Leave Management system. Your task is to generate a final confirmation message for the user's leave request and inform them that their request has been submitted.
 
 Instructions:
-1. Summarize only the mandatory leave request details in a conversational manner.
-2. Use the provided formatted dates when mentioning start and end dates.
-3. Ask the user to confirm if the details are correct.
-4. Mention options for the user to confirm, make changes, or cancel the request.
-5. Keep the overall tone warm, approachable, and concise.
-6. Limit your response to 30 words or less.
-7. If the user is trying to modify an existing parameter, acknowledge the change and ask for confirmation.
-8. Use a natural, conversational tone similar to: "I've got your ${extractedInfo.leaveType} request from ${formattedStartDate} to ${formattedEndDate}. Does this look good to you?"
-
-`.replace(/\\t/g, '');
+1. Confirm that the leave request has been successfully submitted.
+2. Summarize the key details of the leave request (type, dates, working days).
+3. Mention any specific details related to the leave type (e.g., remote work location).
+4. Keep the overall tone warm, approachable, and professional.
+5. Limit your response to 10 words or less.
+`;
 
 		const prompt = `
 Extracted Info: ${JSON.stringify(extractedInfo)}
@@ -56,13 +52,13 @@ Formatted Start Date: ${formattedStartDate}
 Formatted End Date: ${formattedEndDate}
 Mandatory Parameters: ${JSON.stringify(mandatoryParams)}
 
-Generate a brief, friendly confirmation message for the leave request based on the extracted information, focusing only on mandatory parameters. Keep it conversational and under 30 words.
-`.replace(/\\t/g, '');
+Generate a final confirmation message for the leave request, informing the user that their request has been submitted.
+`;
 
 		const chatResponse = await chat(prompt, {
-			maxTokens: 100,
-			temperature: 0.7,
-			preambleOverride: confirmationPreambleOverride,
+			maxTokens: 200,
+			temperature: 0.5,
+			preambleOverride: confirmationPreamble,
 			chatHistory: ctxManager.getConversationHistory(),
 		});
 
@@ -73,22 +69,59 @@ Generate a brief, friendly confirmation message for the leave request based on t
 		ctxManager.setTestResponse(chatResponse.chatResponse.text);
 		ctxManager.reply(chatResponse.chatResponse.text);
 
-		// Transition based on user's response
-		if (
-			userMessage.toLowerCase().includes('confirm') ||
-			userMessage.toLowerCase().includes('yes')
-		) {
-			ctxManager.transition('router');
-		} else if (
-			userMessage.toLowerCase().includes('change') ||
-			userMessage.toLowerCase().includes('edit')
-		) {
-			ctxManager.transition('router');
-		} else if (userMessage.toLowerCase().includes('cancel')) {
-			ctxManager.transition('cancel');
+		// Simulating leave request submission
+		logger.info('Confirmation_LLM: Submitting leave request');
+
+		// Get user profile to retrieve personNumber
+		const userProfile = ctxManager.getUserProfile();
+
+		// Prepare request body
+		const requestBody = {
+			personNumber: userProfile.personNumber,
+			legalEntityId: 300000002024060,
+			absenceType: extractedInfo.leaveType,
+			startDateDuration: extractedInfo.startDayType ? 1 : 0.5,
+			endDateDuration: extractedInfo.endDayType ? 1 : 0.5,
+			startDate: extractedInfo.startDate,
+			endDate: extractedInfo.endDate,
+			absenceStatusCd: 'SAVED',
+			absenceRecordingDFF: [
+				{
+					__FLEX_Context: '300000009102443',
+					__FLEX_Context_DisplayValue: extractedInfo.leaveType,
+					annualLeaveAdvanceSalary: extractedInfo.advanceSalary ? 'Y' : 'N',
+					annualLeaveAdvanceSalary_Display: extractedInfo.advanceSalary
+						? 'Yes'
+						: 'No',
+					leaveDestination:
+						extractedInfo.leaveDestination === 'local' ? 'Local' : 'Abroad',
+				},
+			],
+		};
+
+		// Submit the leave request
+		const submissionResult = await submitLeaveRequest(requestBody, {
+			username: process.env.HRMS_USERNAME || 'testuser1@conneqtiongroup.com',
+			password: process.env.HRMS_PASSWORD || 'DMCC@1234',
+		});
+
+		if (submissionResult.success) {
+			logger.info('Confirmation_LLM: Leave request submitted successfully');
+			// You might want to add some information to the context or send a success message to the user
 		} else {
-			ctxManager.transition('router');
+			logger.error(
+				'Confirmation_LLM: Failed to submit leave request',
+				submissionResult.error
+			);
+			// Handle the error, perhaps by informing the user or retrying
 		}
+
+		// Clear conversation history and extracted info after successful submission
+		ctxManager.clearConversationHistory();
+		ctxManager.setExtractedInfo({});
+		ctxManager.setNullExtractedInfo({});
+
+		ctxManager.transition('router');
 
 		ctxManager.addToConversationHistory(
 			'CHATBOT',

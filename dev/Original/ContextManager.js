@@ -74,7 +74,7 @@ class ContextManager {
 
 	getConversationHistory() {
 		const history = this.context.variable('user.conversationHistory') || [];
-		return history.slice(-7); // Return only the latest 7 messages
+		return history.slice(-7); // Return only the latest 15 messages
 	}
 
 	clearConversationHistory() {
@@ -94,7 +94,6 @@ class ContextManager {
 	getUserProfile() {
 		return this.context.variable('user.profile') || {};
 	}
-
 	populateLeaveTypeParams(leaveType) {
 		const config = this.getLeaveTypeConfig(leaveType);
 		if (!config) return null;
@@ -151,90 +150,6 @@ class ContextManager {
 	getDateInterpretation() {
 		const interpretation = this.context.variable('user.dateInterpretation');
 		return interpretation ? JSON.parse(interpretation) : null;
-	}
-
-	isLeaveRequestComplete() {
-		const extractedInfo = this.getExtractedInfo();
-		const leaveTypeConfig = this.getLeaveTypeConfig(extractedInfo.leaveType);
-
-		if (!leaveTypeConfig) return false;
-
-		return leaveTypeConfig.mandatoryParams.every(
-			(param) =>
-				extractedInfo[param.name] !== null &&
-				extractedInfo[param.name] !== undefined
-		);
-	}
-
-	getNextMissingParam() {
-		const extractedInfo = this.getExtractedInfo();
-		const leaveTypeConfig = this.getLeaveTypeConfig(extractedInfo.leaveType);
-
-		if (!leaveTypeConfig) return null;
-
-		return leaveTypeConfig.mandatoryParams.find(
-			(param) =>
-				extractedInfo[param.name] === null ||
-				extractedInfo[param.name] === undefined
-		);
-	}
-
-	setLeaveRequestStatus(status) {
-		this.context.setVariable('user.leaveRequestStatus', status);
-	}
-
-	getLeaveRequestStatus() {
-		return this.context.variable('user.leaveRequestStatus') || 'in_progress';
-	}
-
-	resetLeaveRequest() {
-		this.setExtractedInfo({});
-		this.setNullExtractedInfo({});
-		this.clearConversationHistory();
-		this.setLeaveRequestStatus('not_started');
-	}
-
-	getFormattedLeaveRequest() {
-		const extractedInfo = this.getExtractedInfo();
-		const leaveTypeConfig = this.getLeaveTypeConfig(extractedInfo.leaveType);
-
-		if (!leaveTypeConfig) return null;
-
-		const formattedRequest = {
-			leaveType: extractedInfo.leaveType,
-			startDate: this.formatDate(extractedInfo.startDate),
-			endDate: this.formatDate(extractedInfo.endDate),
-			workingDays: extractedInfo.workingDays,
-		};
-
-		leaveTypeConfig.mandatoryParams.forEach((param) => {
-			if (param.name !== 'startDate' && param.name !== 'endDate') {
-				formattedRequest[param.name] = extractedInfo[param.name];
-			}
-		});
-
-		leaveTypeConfig.optionalParams.forEach((param) => {
-			if (
-				extractedInfo[param.name] !== null &&
-				extractedInfo[param.name] !== undefined
-			) {
-				formattedRequest[param.name] = extractedInfo[param.name];
-			}
-		});
-
-		return formattedRequest;
-	}
-
-	logState() {
-		const logger = this.context.logger();
-		logger.info('Current State:', {
-			extractedInfo: this.getExtractedInfo(),
-			nullExtractedInfo: this.getNullExtractedInfo(),
-			lastAction: this.getLastAction(),
-			previousAction: this.getPreviousAction(),
-			leaveRequestStatus: this.getLeaveRequestStatus(),
-			dateInterpretation: this.getDateInterpretation(),
-		});
 	}
 }
 

@@ -19,6 +19,7 @@ module.exports = {
 		const calendarTool = new CalendarTool();
 		const dateInfo = await calendarTool.interpretDateQuery(userMessage);
 
+		// Store the date interpretation
 		ctxManager.setDateInterpretation(dateInfo);
 
 		logger.info('Extractor: Date interpretation', dateInfo);
@@ -26,7 +27,6 @@ module.exports = {
 		logger.info('Extractor: Existing data', existingData);
 		logger.info('Extractor: User Message', userMessage);
 		logger.info('Extractor: User Profile', userProfile);
-
 		const extractionPreambleOverride = generateExtractionPreamble(
 			existingData,
 			userProfile
@@ -40,9 +40,7 @@ Extract ONLY the explicitly mentioned leave request information based on the giv
 
 Use the date interpretation provided to extract the start and end dates for the leave request ONLY if they are explicitly mentioned and present in the date interpretation. Do not assume or infer any dates that are not explicitly stated.
 
-If the date interpretation doesn't provide specific dates, do not include start or end dates in your extraction.
-
-Pay special attention to half-day leave requests and update the startDayType and endDayType accordingly.`;
+If the date interpretation doesn't provide specific dates, do not include start or end dates in your extraction.`;
 
 		const chatResponse = await chat(prompt, {
 			maxTokens: 600,
@@ -74,6 +72,11 @@ Pay special attention to half-day leave requests and update the startDayType and
 		);
 		logger.info('Extractor: Raw extracted data', extractedData);
 
+		// Post-processing step to remove any potentially assumed dates
+		// const extractedData = removeAssumedDates(extractedData, userMessage);
+		logger.info('Extractor: Cleaned extracted data', extractedData);
+
+		// Modify the merging process
 		const mergedData = { ...existingData };
 		Object.keys(extractedData).forEach((key) => {
 			if (extractedData[key] !== null) {
@@ -81,6 +84,7 @@ Pay special attention to half-day leave requests and update the startDayType and
 			}
 		});
 
+		// Only use date interpretation if specific dates are provided
 		if (dateInfo.interpretedStartDate) {
 			mergedData.startDate = dateInfo.interpretedStartDate;
 		}
@@ -90,6 +94,7 @@ Pay special attention to half-day leave requests and update the startDayType and
 
 		logger.info('Extractor: Merged data', mergedData);
 
+		// Calculate working days only if both dates are present
 		if (mergedData.startDate && mergedData.endDate) {
 			mergedData.workingDays = calendarTool.getWorkingDays(
 				mergedData.startDate,
@@ -97,8 +102,10 @@ Pay special attention to half-day leave requests and update the startDayType and
 			);
 		}
 
+		// Update the context with the merged data
 		ctxManager.setExtractedInfo(mergedData);
 
+		// Update null extracted info
 		const nullInfo = { ...ctxManager.getNullExtractedInfo() };
 		Object.keys(extractedData).forEach((key) => {
 			nullInfo[key] = extractedData[key] === null;
@@ -106,6 +113,7 @@ Pay special attention to half-day leave requests and update the startDayType and
 		logger.info('Extractor: Null info', nullInfo);
 		ctxManager.setNullExtractedInfo(nullInfo);
 
+		// After extraction logic
 		if (mergedData.leaveType && !mergedData.paramsPopulated) {
 			logger.info(
 				`Extractor: Populating parameters for ${mergedData.leaveType}`
@@ -128,6 +136,7 @@ Pay special attention to half-day leave requests and update the startDayType and
 				ctxManager.setExtractedInfo(updatedExtractedInfo);
 				ctxManager.setNullExtractedInfo(updatedNullExtractedInfo);
 
+				// Transition back to extraction for another round
 				ctxManager.transition('extraction');
 				done();
 				return;
@@ -138,6 +147,7 @@ Pay special attention to half-day leave requests and update the startDayType and
 			}
 		}
 
+		// If extraction is complete, transition to prompt
 		ctxManager.transition('prompt');
 		done();
 	},

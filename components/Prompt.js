@@ -16,54 +16,72 @@ module.exports = {
 		const ctxManager = new ContextManager(context);
 		const userMessage = ctxManager.getUserMessage();
 		const extractedInfo = ctxManager.getExtractedInfo();
-		const nullExtractedInfo = ctxManager.getNullExtractedInfo();
-		const userProfile = ctxManager.getUserProfile();
 		const dateInfo = ctxManager.getDateInterpretation();
 
 		logger.info('Prompt_LLM: Extracted Info', extractedInfo);
-		logger.info('Prompt_LLM: Null Extracted Info', nullExtractedInfo);
 		logger.info('Prompt_LLM: User Message', userMessage);
+
+		const conversationalPreamble = `
+You are Aisha, a friendly and helpful HR colleague in the leave management department. Your task is to assist users with their leave requests in a natural, conversational manner. Speak as if you're chatting with a work friend but with a formal tone.
+
+Important guidelines:
+- Use a natural, flowing conversation style. Avoid bullet points or structured formats.
+- Tailor your language to sound like a real person, not a system or AI.
+- If asking for information, do it casually as part of the conversation.
+- Only ask for mandatory information. Don't mention or ask about optional details.
+- When mentioning dates, use a natural format like "next Monday, October 14th".
+- Keep your responses concise, around 10 words or less.
+- React to the user's messages in a personable way before moving on to the next step.
+`;
 
 		let prompt;
 
 		if (Object.keys(extractedInfo).length === 0 || !extractedInfo.leaveType) {
 			prompt = `
-You are an AI assistant for an HRMS Leave Management system. The user wants to apply for leave, but we don't have any information yet.
+${conversationalPreamble}
 
-Important:
-- Ask the user what type of leave they want to apply for.
-- Provide a brief list of available leave types (e.g., Annual Leave, Sick Leave, Remote Working).
-- Keep the response friendly and concise (under 30 words).
-
-Generate a brief, friendly prompt asking for the leave type.
+The user has just mentioned they want to take leave, but we don't know what type yet. Chat with them to find out what kind of leave they're thinking about. Keep your responses concise, around 10 words or less..
 `;
 		} else {
-			prompt = `
-You are an AI assistant for an HRMS Leave Management system. Your task is to generate appropriate prompts for the user based on the current context of a single leave request process and the user's profile.
+			const leaveTypeConfig = leaveConfig[extractedInfo.leaveType];
+			const missingMandatoryParams = leaveTypeConfig
+				? leaveTypeConfig.mandatoryParams.filter(
+						(param) => !extractedInfo[param.name]
+				  )
+				: [];
 
-Current leave request information:
-${JSON.stringify(extractedInfo, null, 2)}
+			if (missingMandatoryParams.length === 0) {
+				prompt = `
+${conversationalPreamble}
 
-Date Interpretation:
-${JSON.stringify(dateInfo, null, 2)}
+Great news! We've got all the details we need for ${
+					extractedInfo.leaveType
+				}. Chat with the user about reviewing the info before we wrap things up. Make it sound casual and friendly.
 
-Important:
-- If all mandatory parameters are filled, generate a confirmation message summarizing the leave request details.
-- If any mandatory parameters are missing, ask for the missing information one at a time.
-- Do not ask for optional parameters.
-- Do not assume any information that hasn't been explicitly provided or extracted.
-- When mentioning dates, use the format: <day (number)> <month (words)> (<weekday>). For example: "15th May (Monday)".
-- Include both start and end dates when mentioning a date range.
-- Keep responses under 30 words.
-- Consider the user's profile when generating prompts.
-
-Generate a brief, friendly prompt based on the current leave request context.
+Current leave details: ${JSON.stringify(extractedInfo)}
 `;
+			} else {
+				const nextParam = missingMandatoryParams[0];
+				prompt = `
+${conversationalPreamble}
+
+We're helping the user with their ${
+					extractedInfo.leaveType
+				} request. We still need to know about the ${
+					nextParam.name
+				}. Have a friendly chat to get this info, keeping in mind what we already know:
+
+Current leave details: ${JSON.stringify(extractedInfo)}
+Date info: ${JSON.stringify(dateInfo)}
+
+Remember, only working days (Monday to Friday) count for leave.
+`;
+			}
 		}
 
 		const chatResponse = await chat(prompt, {
 			maxTokens: 200,
-			temperature: 0.5,
+			temperature: 0.7,
 			chatHistory: ctxManager.getConversationHistory(),
 		});
 
@@ -71,23 +89,8 @@ Generate a brief, friendly prompt based on the current leave request context.
 		ctxManager.setTestResponse(chatResponse.chatResponse.text);
 		ctxManager.reply(chatResponse.chatResponse.text);
 
-		// Check if all required parameters are filled
-		if (extractedInfo.leaveType) {
-			const config = leaveConfig[extractedInfo.leaveType];
-			if (config) {
-				const missingMandatoryParams = config.mandatoryParams.filter(
-					(param) =>
-						extractedInfo[param.name] === null ||
-						extractedInfo[param.name] === undefined
-				);
-				if (missingMandatoryParams.length === 0) {
-					ctxManager.transition('confirmation');
-				} else {
-					ctxManager.transition('router');
-				}
-			} else {
-				ctxManager.transition('router');
-			}
+		if (ctxManager.isLeaveRequestComplete()) {
+			ctxManager.transition('summary');
 		} else {
 			ctxManager.transition('router');
 		}
