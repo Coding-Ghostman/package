@@ -33,20 +33,22 @@ Extracted Info: ${JSON.stringify(extractedInfo)}
 
 Generate a brief, friendly response handling the cancellation of the leave request or application process.
 `;
-
+		const useLlama = ctxManager.getUseLlama();
 		const chatResponse = await chat(prompt, {
 			maxTokens: 150,
 			temperature: 0.7,
 			preambleOverride: cancelPreamble,
 			chatHistory: ctxManager.getConversationHistory(),
+			useLlama: useLlama,
 		});
+		const result = useLlama
+			? chatResponse.chatResponse.choices[0].message.content[0].text
+			: chatResponse.chatResponse.text;
 
 		logger.info(
-			'Cancel_LLM: Generated response',
-			chatResponse.chatResponse.text
-		);
-		ctxManager.setTestResponse(chatResponse.chatResponse.text);
-		ctxManager.reply(chatResponse.chatResponse.text);
+			'Cancel_LLM: Generated response', result);
+		ctxManager.setTestResponse(result);
+		ctxManager.reply(result);
 
 		// Clear extracted info and conversation history
 		ctxManager.setExtractedInfo({});

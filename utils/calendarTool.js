@@ -1,11 +1,13 @@
 const moment = require('moment');
 const { chat } = require('./chat');
+const { extractJsonObject } = require('./utils');
 
 class CalendarTool {
 	constructor(config = {}) {
 		this.currentDate = moment();
 		this.holidays = config.holidays || [];
 		this.workingDays = config.workingDays || [1, 2, 3, 4, 5]; // Monday to Friday by default
+		this.useLlama = config.useLlama || false;
 	}
 
 	/**
@@ -26,10 +28,29 @@ class CalendarTool {
 		};
 
 		// Define keywords that indicate date-related queries
-		const dateKeywords = ['today', 'tomorrow', 'yesterday', 'next', 'last', 'this', 'week', 'month', 'year', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+		const dateKeywords = [
+			'today',
+			'tomorrow',
+			'yesterday',
+			'next',
+			'last',
+			'this',
+			'week',
+			'month',
+			'year',
+			'monday',
+			'tuesday',
+			'wednesday',
+			'thursday',
+			'friday',
+			'saturday',
+			'sunday',
+		];
 
 		// Check if the query contains any date-related keywords
-		const containsDateKeyword = dateKeywords.some(keyword => normalizedQuery.includes(keyword));
+		const containsDateKeyword = dateKeywords.some((keyword) =>
+			normalizedQuery.includes(keyword)
+		);
 
 		// If the query doesn't contain any date-related keywords, return the response without interpretation
 		if (!containsDateKeyword) {
@@ -61,6 +82,10 @@ IMPORTANT RULES:
 6. DO NOT assume any dates if they are not explicitly mentioned in the query.
 7. If the query is about a future month or week, make sure to interpret it correctly.
 8. If no specific dates or relative time periods are mentioned, return null for both interpretedStartDate and interpretedEndDate.
+9. If MULTIPLE LEAVES ARE MENTIONED AND IT CREATES AMBIGUITY, WHERE BOTH THE DATES CAN BE USED FOR A SINGLE DATE PARAMETER, ADD BOTH THE DATES IN AN ARRAY.
+10. When a user submits a request that includes a date but it’s ambiguous or unclear, the system must gracefully inform the user of the confusion and ask for clarification. This approach ensures that the user feels supported and can provide the necessary details without frustration.
+Example prompt for users:	
+"I’m a bit unclear about the date you mentioned. Could you please specify which date you’d like to take leave? For example, if you meant 'tomorrow,' please confirm the exact date or if there's a different date you're referring to. Your clarification will help me process your request accurately!"
 
 Provide the interpretation in the following JSON format:
 {
@@ -73,21 +98,51 @@ Provide the interpretation in the following JSON format:
 If no specific dates can be determined from the query, set interpretedStartDate and interpretedEndDate to null.
 Ensure that the interpretedStartDate and interpretedEndDate strictly follow the rules above.
 `;
-
 			const chatResponse = await chat(prompt, {
 				maxTokens: 300,
 				temperature: 0,
+				useLlama: this.useLlama,
 			});
+			let interpretation = null;
+			if (this.useLlama) {
+				const rawContent =
+					chatResponse.chatResponse.choices[0].message.content[0].text
+						.replace(/`/g, '')
+						.replace('json', '')
+						.replace(/\\n/g, '')
+						.trim();
 
-			const interpretation = JSON.parse(chatResponse.chatResponse.text);
+				const jsonString = extractJsonObject(rawContent);
+
+				if (jsonString) {
+					try {
+						interpretation = JSON.parse(jsonString);
+					} catch (error) {
+						console.error('Error parsing JSON:', error);
+						interpretation = null;
+					}
+				} else {
+					console.error('No valid JSON object found in the response');
+					interpretation = null;
+				}
+			} else {
+				try {
+					interpretation = JSON.parse(chatResponse.chatResponse.text);
+				} catch (error) {
+					console.error('Error parsing JSON:', error);
+					interpretation = null;
+				}
+			}
 
 			// Merge the LLM interpretation with our response object
 			Object.assign(response, interpretation);
-
+			console.log('Callendar Tool: RESPONSE: ', response);
 			// Convert interpretedStartDate and interpretedEndDate to moment objects if they exist
 			if (response.interpretedStartDate) {
 				response.startDate = moment(response.interpretedStartDate);
-				response.startDateFormatted = this.formatDateInWords(response.startDate);
+				response.startDateFormatted = this.formatDateInWords(
+					response.startDate
+				);
 				response.startDateIso8601 = response.startDate.format('YYYY-MM-DD');
 			}
 
@@ -99,7 +154,10 @@ Ensure that the interpretedStartDate and interpretedEndDate strictly follow the 
 
 			// Calculate working days if both start and end dates are present
 			if (response.startDate && response.endDate) {
-				response.workingDays = this.getWorkingDays(response.startDate, response.endDate);
+				response.workingDays = this.getWorkingDays(
+					response.startDate,
+					response.endDate
+				);
 			}
 		} catch (error) {
 			response.error = `Failed to interpret date query: ${error.message}`;

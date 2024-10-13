@@ -42,19 +42,20 @@ User Profile: ${JSON.stringify(userProfile)}
 
 Chat with the user to summarize their leave request and casually ask if everything looks good to go.
 `;
-
+		const useLlama = ctxManager.getUseLlama();
 		const chatResponse = await chat(prompt, {
 			maxTokens: 200,
 			temperature: 0.7,
 			chatHistory: ctxManager.getConversationHistory(),
+			useLlama: useLlama,
 		});
+		const result = useLlama
+			? chatResponse.chatResponse.choices[0].message.content[0].text
+			: chatResponse.chatResponse.text;
 
-		logger.info(
-			'Summary_LLM: Generated summary',
-			chatResponse.chatResponse.text
-		);
-		ctxManager.setTestResponse(chatResponse.chatResponse.text);
-		ctxManager.reply(chatResponse.chatResponse.text);
+		logger.info('Summary_LLM: Generated summary', result);
+		ctxManager.setTestResponse(result);
+		ctxManager.reply(result);
 
 		// Handle user response
 		if (
@@ -67,10 +68,7 @@ Chat with the user to summarize their leave request and casually ask if everythi
 			ctxManager.transition('router');
 		}
 
-		ctxManager.addToConversationHistory(
-			'CHATBOT',
-			chatResponse.chatResponse.text
-		);
+		ctxManager.addToConversationHistory('CHATBOT', result);
 
 		done();
 	},

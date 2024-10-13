@@ -74,7 +74,15 @@ class ContextManager {
 
 	getConversationHistory() {
 		const history = this.context.variable('user.conversationHistory') || [];
-		return history.slice(-15); // Return only the latest 15 messages
+		return history.slice(-10); // Return only the latest 10 messages
+	}
+
+	setUseLlama(useLlama) {
+		this.context.setVariable('user.useLlama', useLlama);
+	}
+
+	getUseLlama() {
+		return this.context.variable('user.useLlama') || false;
 	}
 
 	clearConversationHistory() {

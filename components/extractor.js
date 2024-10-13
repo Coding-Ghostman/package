@@ -2,7 +2,7 @@ const { chat } = require('../utils/chat');
 const ContextManager = require('./ContextManager');
 const CalendarTool = require('../utils/calendarTool');
 const leaveConfig = require('../utils/leaveConfig');
-
+const { extractJsonObject } = require('../utils/utils');
 module.exports = {
 	metadata: {
 		name: 'extractor_v3',
@@ -16,7 +16,7 @@ module.exports = {
 		const ctxManager = new ContextManager(context);
 		const userMessage = ctxManager.getUserMessage();
 		const userProfile = ctxManager.getUserProfile();
-		const calendarTool = new CalendarTool();
+		const calendarTool = new CalendarTool({ useLlama: true });
 		const dateInfo = await calendarTool.interpretDateQuery(userMessage);
 
 		ctxManager.setDateInterpretation(dateInfo);
@@ -43,7 +43,7 @@ Use the date interpretation provided to extract the start and end dates for the 
 If the date interpretation doesn't provide specific dates, do not include start or end dates in your extraction.
 
 Pay special attention to half-day leave requests and update the startDayType and endDayType accordingly.`;
-
+		const useLlama = ctxManager.getUseLlama();
 		const chatResponse = await chat(prompt, {
 			maxTokens: 600,
 			temperature: 0,
@@ -63,15 +63,38 @@ Pay special attention to half-day leave requests and update the startDayType and
 			],
 			preambleOverride: extractionPreambleOverride,
 			chatHistory: ctxManager.getConversationHistory(),
+			useLlama: useLlama,
 		});
+		let extractedData;
+		if (useLlama) {
+			const rawContent =
+				chatResponse.chatResponse.choices[0].message.content[0].text
+					.replace(/`/g, '')
+					.replace('json', '')
+					.replace(/\\n/g, '')
+					.trim();
 
-		let extractedData = JSON.parse(
-			chatResponse.chatResponse.text
-				.replace(/`/g, '')
-				.replace('json', '')
-				.replace(/\\n/g, '')
-				.trim()
-		);
+			const jsonString = extractJsonObject(rawContent);
+
+			if (jsonString) {
+				try {
+					extractedData = JSON.parse(jsonString);
+				} catch (error) {
+					console.error('Error parsing JSON:', error);
+					extractedData = null;
+				}
+			} else {
+				console.error('No valid JSON object found in the response');
+				extractedData = null;
+			}
+		} else {
+			try {
+				extractedData = JSON.parse(chatResponse.chatResponse.text);
+			} catch (error) {
+				console.error('Error parsing JSON:', error);
+				extractedData = null;
+			}
+		}
 		logger.info('Extractor: Raw extracted data', extractedData);
 
 		const mergedData = { ...existingData };
@@ -129,6 +152,10 @@ Pay special attention to half-day leave requests and update the startDayType and
 				ctxManager.setNullExtractedInfo(updatedNullExtractedInfo);
 
 				ctxManager.transition('extraction');
+				ctxManager.addToConversationHistory(
+					'CHATBOT',
+					JSON.stringify(updatedExtractedInfo)
+				);
 				done();
 				return;
 			} else {
@@ -152,8 +179,11 @@ function generateExtractionPreamble(existingData, userProfile) {
 	IMPORTANT: HANDLE THE CASES WHERE THE USER MENTIONS THE SAME DATE FOR START AND END DATES.
 	IMPORTANT: HANDLE THE CASE WHERE THE USER MIGHT BE ASKING FOR HALF DAY LEAVE.
 	IMPORTANT: IF THE USER IS ASKING TO TAKE HALF DAY LEAVE, CHECK THE START DAY TYPE AND END DAY TYPE PARAMETERS. UPDATE THEM ACCORDINGLY. TRUE FOR FULL DAY, FALSE FOR HALF DAY.
-	IMPORTANT: CONSIDER THE USER'S PROFILE WHEN EXTRACTING INFORMATION, ESPECIALLY FOR LEAVE TYPES AND DESTINATIONS.
 	IMPORTANT: USE CAMEL CASE FOR THE KEYS like leaveType, startDate, endDate, etc.
+	IMPORTANT: If MULTIPLE LEAVES ARE MENTIONED AND IT CREATES AMBIGUITY, WHERE BOTH THE DATES CAN BE USED FOR A SINGLE DATE PARAMETER, ADD BOTH THE DATES IN AN ARRAY.
+
+	FOR EXAMPLE: If the user says "I want to take leave tomorrow, 15th of Oct", Here, Tomorrow is 14th Oct, but he also mentioned 15th Oct, so add it as ["14-10-2024", "15-10-2024"] to the startDate parameter.
+	Please Refer to the Date Interpretation to understand the exact dates.
 
 	Extract ONLY the following parameters if EXPLICITLY mentioned:
 
@@ -165,10 +195,6 @@ function generateExtractionPreamble(existingData, userProfile) {
 
 	IF NO PARAMETERS ARE EXPLICITLY MENTIONED, JUST PROVIDE AN EMPTY JSON OBJECT i.e. {}.
 
-
-
-	User Profile:
-	${JSON.stringify(userProfile)}
 	`;
 
 	console.log('Extractor: Existing leave type', existingData);

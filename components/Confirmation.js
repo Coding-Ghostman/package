@@ -55,20 +55,21 @@ Mandatory Parameters: ${JSON.stringify(mandatoryParams)}
 
 Generate a final confirmation message for the leave request, informing the user that their request has been submitted.
 `;
-
+		const useLlama = ctxManager.getUseLlama();
 		const chatResponse = await chat(prompt, {
 			maxTokens: 200,
 			temperature: 0.5,
 			preambleOverride: confirmationPreamble,
 			chatHistory: ctxManager.getConversationHistory(),
+			useLlama: useLlama,
 		});
+		const result = useLlama
+			? chatResponse.chatResponse.choices[0].message.content[0].text
+			: chatResponse.chatResponse.text;
 
-		logger.info(
-			'Confirmation_LLM: Generated confirmation',
-			chatResponse.chatResponse.text
-		);
-		ctxManager.setTestResponse(chatResponse.chatResponse.text);
-		ctxManager.reply(chatResponse.chatResponse.text);
+		logger.info('Confirmation_LLM: Generated confirmation', result);
+		ctxManager.setTestResponse(result);
+		ctxManager.reply(result);
 
 		// Simulating leave request submission
 		logger.info('Confirmation_LLM: Submitting leave request');
@@ -79,7 +80,7 @@ Generate a final confirmation message for the leave request, informing the user 
 		// Prepare request body
 		const requestBody = {
 			personNumber: userProfile.personNumber,
-			legalEntityId: 300000002024060,
+			legalEntityId: userProfile.legalEntityId,
 			absenceType: extractedInfo.leaveType,
 			startDateDuration: extractedInfo.startDayType ? 1 : 0.5,
 			endDateDuration: extractedInfo.endDayType ? 1 : 0.5,
@@ -124,10 +125,7 @@ Generate a final confirmation message for the leave request, informing the user 
 
 		ctxManager.transition('router');
 
-		ctxManager.addToConversationHistory(
-			'CHATBOT',
-			chatResponse.chatResponse.text
-		);
+		ctxManager.addToConversationHistory('CHATBOT', result);
 
 		done();
 	},

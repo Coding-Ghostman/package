@@ -11,19 +11,18 @@ module.exports = {
 			'confirmation',
 			'cancel',
 			'policy',
-			'summary',
 		],
 	},
 	invoke: async (context, done) => {
 		const logger = context.logger();
 		logger.info('Router: Invoked');
-
 		const ctxManager = new ContextManager(context);
 		const userMessage = ctxManager.getUserMessage();
 		ctxManager.addToConversationHistory('USER', userMessage);
 		const extractedInfo = ctxManager.getExtractedInfo();
 		const previousAction = ctxManager.getPreviousAction();
 		const userProfile = ctxManager.getUserProfile();
+		ctxManager.setUseLlama(true);
 
 		logger.info('Router: User Message', userMessage);
 		logger.info('Router: Extracted Info', extractedInfo);
@@ -58,7 +57,6 @@ module.exports = {
 				userMessage
 			);
 			ctxManager.reply(interruptionResponse);
-			ctxManager.addToConversationHistory('CHATBOT', interruptionResponse);
 			ctxManager.transition('router');
 			done();
 			return;
@@ -102,18 +100,18 @@ async function determineInitialAction(
 	const logger = ctxManager.context.logger();
 	logger.info('determineInitialAction: Started');
 
-	const routingPreamble = `You are an intelligent Routing Assistant for a HRMS Leave Management Framework. Your task is to determine the next action based on the user query, extracted information, and user profile for a single leave request.
+	const routingPreamble = `You are an intelligent Routing Assistant for a HRMS Leave Management Framework. Your task is to determine the next action based on the user query andextracted information for a single leave request.
 
   Instructions:
-  1. Analyze the user query for information related to the current leave request, user profile inquiries, or potential interruptions.
-  2. Consider the following parameters: leave type, start date, end date, and user profile information.
+  1. Analyze the user query for information related to the current leave request or potential interruptions.
+  2. Consider the following parameters: leave type, start date, end date
   3. Respond ONLY with one of the following actions:
      - "extraction": if there is new information to extract or update for the current request.
      - "prompt": if more information is needed from the user for the current request.
      - "confirmation": if all necessary information is present and ready for confirmation.
      - "cancel": if the user wants to cancel the current request or start over.
-     - "interruption": if the user's query is unrelated to the leave request process or requires clarification before continuing or answer greeting and general Questions.
-		 - "policy": if the user is asking about the policy related to leave requests.
+     - "interruption": if the user's query is unrelated to the leave request process or answer greeting and general Questions.
+		 - "policy": if the user is asking about the policy related to leave requests or anything related to self validation like "Can I apply for this leave type?" or you feel like the answer is not related to the leave request but related to HR policies.
 
   Remember: Your response must be ONLY one of the above actions. Do not provide any explanations or additional text. We are handling only one leave request at a time.`;
 
@@ -121,14 +119,15 @@ async function determineInitialAction(
     Prompt That was provided to User: ${ctxManager.getTestResponse()}
     Extracted Information: ${JSON.stringify(extractedInfo)}
     Previous Action: ${previousAction}
-    User Profile: ${JSON.stringify(userProfile)}
 
   Based on the user query, extracted information, previous action, user profile, and conversation history, determine the next action for the current leave request, user profile inquiry, or potential interruption.`;
 
 	logger.info('determineInitialAction: Sending chat request');
+	const useLlama = ctxManager.getUseLlama();
 	const response = await chat(prompt, {
 		maxTokens: 100,
 		temperature: 0,
+		useLlama: useLlama,
 		docs: [
 			{
 				title: 'Sick',
@@ -136,7 +135,7 @@ async function determineInitialAction(
 			},
 			{
 				title: 'Annual',
-				text: 'The employee is entitled to take 20 days annual leave at their discretion without giving a particular reason. The purpose is simply to give them a break from work. This time might also be referred to as vacation, Personal Time Off (PTO), or annual leave.',
+				text: 'The employee is entitled to take  annual leave at their discretion without giving a particular reason. The purpose is simply to give them a break from work. This time might also be referred to as vacation, Personal Time Off (PTO), or annual leave.',
 			},
 			{
 				title: 'Remote',
@@ -147,7 +146,11 @@ async function determineInitialAction(
 		chatHistory: ctxManager.getConversationHistory(),
 	});
 
-	const result = response.chatResponse.text.toLowerCase().trim();
+	const result = useLlama
+		? response.chatResponse.choices[0].message.content[0].text
+				.toLowerCase()
+				.trim()
+		: response.chatResponse.text.toLowerCase().trim();
 	logger.info(`determineInitialAction: Completed with result - ${result}`);
 	return result;
 }
@@ -169,9 +172,9 @@ async function determineFinalAction(ctxManager, currentAction) {
 
 			if (missingMandatoryParams.length === 0 && currentAction !== 'cancel') {
 				logger.info(
-					'determineFinalAction: All mandatory info present, returning summary'
+					'determineFinalAction: All mandatory info present, returning confirmation'
 				);
-				return 'summary';
+				return 'confirmation';
 			}
 		}
 	}
@@ -259,19 +262,22 @@ Instructions:
 
 
   Respond to the user's query, acknowledge any changes in leave type, and ask if they want to continue with the leave request process or exit.`;
-
+	const useLlama = ctxManager.getUseLlama();
 	const interruptionResponse = await chat(interruptionPrompt, {
 		maxTokens: 200,
 		temperature: 0.7,
 		preambleOverride: interruptionPreamble,
 		chatHistory: ctxManager.getConversationHistory(),
+		useLlama: useLlama,
 	});
 
 	logger.info(
 		'handleInterruption: Generated response',
 		interruptionResponse.chatResponse.text
 	);
-	return interruptionResponse.chatResponse.text;
+	return useLlama
+		? interruptionResponse.chatResponse.choices[0].message.content[0].text
+		: interruptionResponse.chatResponse.text;
 }
 
 async function handleProfileCheck(ctxManager, userProfile) {
@@ -291,18 +297,23 @@ async function handleProfileCheck(ctxManager, userProfile) {
 	User Query: ${ctxManager.getUserMessage()}
 
 	Respond to the user's query about their profile information or leave balance based on the provided user profile.`;
-
+	const useLlama = ctxManager.getUseLlama();
 	const profileCheckResponse = await chat(profileCheckPrompt, {
 		maxTokens: 200,
 		temperature: 0.7,
 		preambleOverride: profileCheckPreamble,
+		useLlama: useLlama,
+		// chatHistory: ctxManager.getConversationHistory(),
 	});
 
 	logger.info(
 		'handleProfileCheck: Generated response',
 		profileCheckResponse.chatResponse.text
 	);
-	ctxManager.reply(profileCheckResponse.chatResponse.text);
+	const result = useLlama
+		? profileCheckResponse.chatResponse.choices[0].message.content[0].text
+		: profileCheckResponse.chatResponse.text;
+	ctxManager.reply(result);
 	ctxManager.addToConversationHistory(
 		'CHATBOT',
 		profileCheckResponse.chatResponse.text

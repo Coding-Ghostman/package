@@ -7,12 +7,14 @@ module.exports = {
 			{
 				name: 'startDayType',
 				default: true,
-				description: 'Whether the start date is a full day or half day. true for full day, false for half day',
+				description:
+					'Whether the start date is a full day or half day. true for full day, false for half day',
 			},
 			{
 				name: 'endDayType',
 				default: true,
-				description: 'Whether the end date is a full day or half day. true for full day, false for half day',
+				description:
+					'Whether the end date is a full day or half day. true for full day, false for half day',
 			},
 		],
 		optionalParams: [

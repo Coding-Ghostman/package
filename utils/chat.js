@@ -11,7 +11,7 @@ async function chat(message, options = {}) {
 		configurationFilePath,
 		configProfile
 	);
-	
+
 	const {
 		chatHistory = [],
 		docs = [],
@@ -24,7 +24,33 @@ async function chat(message, options = {}) {
 		topP = 0.5,
 		topK = 0.5,
 		preambleOverride = '',
+		useLlama = false, // New option to use LLaMa model
 	} = options;
+
+	console.log('docs', docs);
+
+	// Create a context section from docs
+	const contextSection =
+		docs.length > 0
+			? '\n\nContext:\n' +
+			  docs.map((doc) => `${doc.title}: ${doc.text}`).join('\n')
+			: '';
+	const history = chatHistory.map(({ role, message }) => ({
+		role: role === 'CHATBOT' ? 'ASSISTANT' : role.toUpperCase(),
+		content: [{ type: 'TEXT', text: message }],
+	}));
+
+	// Combine preamble, context, and message
+	const fullMessage = `LEAVE CONTEXT: ${
+		contextSection || 'No Context for now'
+	}\n\nCONVERSATION HISTORY: ${JSON.stringify(history)}\n\n${message}`;
+	const systemMessage = {
+		role: 'SYSTEM',
+		content: [{ type: 'TEXT', text: preambleOverride }],
+	};
+	console.log('contextSection', contextSection);
+	console.log('history', history);
+	console.log('fullMessage', fullMessage);
 
 	// 1. Create Request Signing instance
 	const signer = new common.DefaultRequestSigner(provider);
@@ -37,27 +63,55 @@ async function chat(message, options = {}) {
 		'Content-Type': 'application/json',
 	});
 
-	const body = JSON.stringify({
-		compartmentId: provider.getTenantId(),
-		servingMode: {
-			modelId: 'cohere.command-r-plus',
-			servingType: 'ON_DEMAND',
-		},
-		chatRequest: {
-			message: message,
-			maxTokens: maxTokens,
-			isStream: isStream,
-			apiFormat: apiFormat,
-			frequencyPenalty: frequencyPenalty,
-			preambleOverride: preambleOverride,
-			presencePenalty: presencePenalty,
-			temperature: temperature,
-			topP: topP,
-			topK: topK,
-			documents: docs,
-			chatHistory: chatHistory,
-		},
-	});
+	const body = JSON.stringify(
+		useLlama
+			? {
+					compartmentId: provider.getTenantId(),
+					servingMode: {
+						modelId: 'meta.llama-3.1-70b-instruct',
+						servingType: 'ON_DEMAND',
+					},
+					chatRequest: {
+						messages: [
+							systemMessage,
+							{
+								role: 'USER',
+								content: [{ type: 'TEXT', text: fullMessage }],
+							},
+						],
+						apiFormat: 'GENERIC',
+						maxTokens: maxTokens,
+						isStream: isStream,
+						numGenerations: 1,
+						frequencyPenalty: frequencyPenalty,
+						presencePenalty: presencePenalty,
+						temperature: temperature,
+						topP: topP,
+						topK: -1,
+					},
+			  }
+			: {
+					compartmentId: provider.getTenantId(),
+					servingMode: {
+						modelId: 'cohere.command-r-plus',
+						servingType: 'ON_DEMAND',
+					},
+					chatRequest: {
+						message: message,
+						maxTokens: maxTokens,
+						isStream: isStream,
+						apiFormat: apiFormat,
+						frequencyPenalty: frequencyPenalty,
+						preambleOverride: preambleOverride,
+						presencePenalty: presencePenalty,
+						temperature: temperature,
+						topP: topP,
+						topK: topK,
+						documents: docs,
+						chatHistory: chatHistory,
+					},
+			  }
+	);
 
 	const httpRequest = {
 		uri: endpoint,
@@ -67,9 +121,10 @@ async function chat(message, options = {}) {
 	};
 	// 3. sign request
 	console.log('****************************');
-	console.log('httpRequest', httpRequest);
+	console.log('httpRequest', httpRequest.body);
 	console.log('****************************');
 	await signer.signHttpRequest(httpRequest);
+
 	// 4. Make the call
 	let response = await fetch(httpRequest.uri, {
 		method: httpRequest.method,
