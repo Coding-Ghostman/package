@@ -16,62 +16,54 @@ module.exports = {
 		const ctxManager = new ContextManager(context);
 		const userMessage = ctxManager.getUserMessage();
 		const extractedInfo = ctxManager.getExtractedInfo();
+		const nullExtractedInfo = ctxManager.getNullExtractedInfo();
 		const userProfile = ctxManager.getUserProfile();
-		const calendarTool = new CalendarTool();
-		const dateInfo = calendarTool.interpretDateQuery(userMessage);
+		const dateInfo = ctxManager.getDateInterpretation();
 
 		logger.info('Prompt_LLM: Extracted Info', extractedInfo);
+		logger.info('Prompt_LLM: Null Extracted Info', nullExtractedInfo);
 		logger.info('Prompt_LLM: User Message', userMessage);
 
-		const promptPreambleOverride = `
-You are an AI assistant for an HRMS Leave Management system. Your task is to generate appropriate prompts for the user based on the current context of a single leave request process and the user's profile.
+		let prompt;
+
+		if (Object.keys(extractedInfo).length === 0 || !extractedInfo.leaveType) {
+			prompt = `
+You are an AI assistant for an HRMS Leave Management system. The user wants to apply for leave, but we don't have any information yet.
 
 Important:
-- Focus only on obtaining missing mandatory parameters for the specified leave type or requesting confirmation.
-- If all mandatory parameters are filled, ask for confirmation.
-- Generate a conversational prompt to ask for missing information, focusing on one parameter at a time.
+- Ask the user what type of leave they want to apply for.
+- Provide a brief list of available leave types (e.g., Annual Leave, Sick Leave, Remote Working).
+- Keep the response friendly and concise (under 30 words).
+
+Generate a brief, friendly prompt asking for the leave type.
+`;
+		} else {
+			prompt = `
+You are an AI assistant for an HRMS Leave Management system. Your task is to generate appropriate prompts for the user based on the current context of a single leave request process and the user's profile.
+
+Current leave request information:
+${JSON.stringify(extractedInfo, null, 2)}
+
+Date Interpretation:
+${JSON.stringify(dateInfo, null, 2)}
+
+Important:
+- If all mandatory parameters are filled, generate a confirmation message summarizing the leave request details.
+- If any mandatory parameters are missing, ask for the missing information one at a time.
 - Do not ask for optional parameters.
 - Do not assume any information that hasn't been explicitly provided or extracted.
 - When mentioning dates, use the format: <day (number)> <month (words)> (<weekday>). For example: "15th May (Monday)".
 - Include both start and end dates when mentioning a date range.
-- Keep responses under 20 words.
-- Consider the user's profile if it is relevant to the context when generating prompts.
+- Keep responses under 30 words.
+- Consider the user's profile when generating prompts.
 
-Remember: Never imply or assume a leave type or any other information that isn't in the extracted info or user profile.
-`.replace(/\\t/g, '');
-
-		const leaveTypeConfig = extractedInfo.leaveType
-			? leaveConfig[extractedInfo.leaveType]
-			: null;
-
-		const missingMandatoryParams = [];
-		if (leaveTypeConfig) {
-			leaveTypeConfig.mandatoryParams.forEach((param) => {
-				if (
-					extractedInfo[param.name] === null ||
-					extractedInfo[param.name] === undefined
-				) {
-					missingMandatoryParams.push(param);
-				}
-			});
+Generate a brief, friendly prompt based on the current leave request context.
+`;
 		}
-
-		const prompt = `
-${promptPreambleOverride}
-
-User Query: ${userMessage}
-Extracted Info: ${JSON.stringify(extractedInfo)}
-Missing Mandatory Params: ${JSON.stringify(missingMandatoryParams)}
-Leave Type Config: ${JSON.stringify(leaveTypeConfig)}
-User Profile: ${JSON.stringify(userProfile)}
-
-Generate a brief, friendly prompt based on the current leave request context and user profile. If there are missing mandatory parameters, ask for one of them. If all mandatory parameters are filled, ask for confirmation. Keep it short and conversational. Do not assume any information not present in the extracted info or user profile.
-`.replace(/\\t/g, '');
 
 		const chatResponse = await chat(prompt, {
 			maxTokens: 200,
 			temperature: 0.5,
-			preambleOverride: promptPreambleOverride,
 			chatHistory: ctxManager.getConversationHistory(),
 		});
 

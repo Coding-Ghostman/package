@@ -17,138 +17,51 @@ module.exports = {
 		const userMessage = ctxManager.getUserMessage();
 		const userProfile = ctxManager.getUserProfile();
 		const calendarTool = new CalendarTool();
-		const dateInfo = calendarTool.interpretDateQuery(userMessage);
+		const dateInfo = await calendarTool.interpretDateQuery(userMessage);
+
+		// Store the date interpretation
+		ctxManager.setDateInterpretation(dateInfo);
+
 		logger.info('Extractor: Date interpretation', dateInfo);
 		const existingData = ctxManager.getExtractedInfo();
 		logger.info('Extractor: Existing data', existingData);
 		logger.info('Extractor: User Message', userMessage);
 		logger.info('Extractor: User Profile', userProfile);
-
-		const extractionPreamble = `You are an AI assistant for an HRMS Leave Management system. Your task is to extract ONLY explicitly mentioned information from the user's query about a single leave request. Do not make any assumptions or inferences.
-
-CORE RULES:
-1. Extract ONLY explicitly stated information
-2. Use YYYY-MM-DD format for all dates
-3. Return empty JSON ({}) if no explicit parameters found
-4. Use camelCase for all JSON keys
-5. Never create new key fields beyond the defined schema
-6. Consider only Monday to Friday as working days
-7. Don't use any date, time or duration information that is not explicitly mentioned by the user
-8. If user is asking for half day leave, check the startDayType and endDayType parameters. Update them accordingly. True for full day, false for half day.
-9. If Any Location outside of UAE is mentioned is deemed as Abroad or else it will be deemed as Local.
-
-WORKING DAYS HANDLING:
-1. If leave requested for weekend:
-   - Adjust to nearest working day
-   - Start date on weekend → Move to next Monday
-   - End date on weekend → Move to previous Friday
-
-HALF-DAY LEAVE RULES:
-1. When half-day is mentioned:
-   - Set relevant dayType to false (full day = true, half day = false)
-   - Both startDayType and endDayType must be specified
-2. For single-day leave:
-   - Set both startDate and endDate to same date
-   - Specify both startDayType and endDayType
-
-MANDATORY PARAMETERS:
-1. leaveType (string):
-   - Must match user profile's available leave types
-   - Examples: "Annual Leave", "Sick Leave", "Remote Working"
-
-2. startDate (YYYY-MM-DD):
-   - Must be explicitly mentioned
-   - Must be a working day (Mon-Fri)
-   - Adjust if falls on weekend
-
-3. endDate (YYYY-MM-DD):
-   - Must be explicitly mentioned
-   - Must be a working day (Mon-Fri)
-   - Adjust if falls on weekend
-
-4. startDayType (boolean):
-   - true = full day
-   - false = half day
-   - Must be specified for half-day requests
-
-5. endDayType (boolean):
-   - true = full day
-   - false = half day
-   - Must be specified for half-day requests
-
-CUSTOM LEAVE TYPE PARAMETERS:
-${
-	existingData.leaveType
-		? `Additional parameters for ${existingData.leaveType}: Mandatory Fields:
-${leaveConfig[existingData.leaveType]?.mandatoryParams
-	.filter((param) => param.name !== 'startDate' && param.name !== 'endDate')
-	.map((param) => `- ${param.name}: ${param.description}`)
-	.join('\n')}
-Optional Fields:
-${leaveConfig[existingData.leaveType]?.optionalParams
-	.map((param) => `- ${param.name}: ${param.description}`)
-	.join('\n')}`
-		: ''
-}
-
-VALIDATION RULES:
-1. Dates:
-   - Must be valid dates in YYYY-MM-DD format
-   - startDate must not be after endDate
-   - Must be working days (Mon-Fri)
-
-2. Leave Types:
-   - Must match user profile permissions
-   - Must be exactly as defined in system
-
-3. Day Types:
-   - Must be boolean values
-   - Required for half-day requests
-
-OUTPUT FORMAT:
-{
-  "leaveType": "string",
-  "startDate": "YYYY-MM-DD",
-  "endDate": "YYYY-MM-DD",
-  "startDayType": boolean,
-  "endDayType": boolean,
-  // Additional fields based on leave type
-}`;
-
+		const extractionPreambleOverride = generateExtractionPreamble(
+			existingData,
+			userProfile
+		);
 		const prompt = `
-${extractionPreamble}
-
-Context:
 User Query: ${userMessage}
-Current Date (Reference Only): ${dateInfo.currentDate}
+Date Interpretation: ${JSON.stringify(dateInfo)}
 Existing Information: ${JSON.stringify(existingData)}
 
-Extract ONLY explicitly mentioned information from the user query following the above rules and format.
-Return empty JSON if no explicit parameters found.
-Consider user profile permissions when validating leave types.
-DO NOT use the current date or make any assumptions about dates. Only extract dates explicitly mentioned by the user.`;
+Extract ONLY the explicitly mentioned leave request information based on the given instructions. Do NOT include any information that is not explicitly stated in the user's query. Consider the user's profile when extracting information.
 
-		logger.info('Extractor: Sending chat request');
+Use the date interpretation provided to extract the start and end dates for the leave request ONLY if they are explicitly mentioned and present in the date interpretation. Do not assume or infer any dates that are not explicitly stated.
+
+If the date interpretation doesn't provide specific dates, do not include start or end dates in your extraction.`;
+
 		const chatResponse = await chat(prompt, {
 			maxTokens: 600,
 			temperature: 0,
 			docs: [
 				{
-					title: 'Sick',
+					title: 'Sick Leave',
 					text: 'Used if the employee is unable to attend work due to a medical reason, such as they are ill, or have to attend a medical appointment',
 				},
 				{
-					title: 'Annual',
+					title: 'Annual Leave',
 					text: 'The employee can take annual leave at their discretion without giving a particular reason. The purpose is simply to give them a break from work. This time might also be referred to as vacation, Personal Time Off (PTO), or annual leave.',
 				},
 				{
-					title: 'Remote',
+					title: 'Remote Working',
 					text: 'Used if the employee wishes to have some time working outside of the office - for example working from home, or another remote location.',
 				},
 			],
+			preambleOverride: extractionPreambleOverride,
 			chatHistory: ctxManager.getConversationHistory(),
 		});
-		logger.info('Extractor: Received chat response');
 
 		let extractedData = JSON.parse(
 			chatResponse.chatResponse.text
@@ -157,71 +70,28 @@ DO NOT use the current date or make any assumptions about dates. Only extract da
 				.replace(/\\n/g, '')
 				.trim()
 		);
-		logger.info('Extractor: Parsing extracted data');
-		logger.info('Extractor: Parsed extracted data', extractedData);
+		logger.info('Extractor: Raw extracted data', extractedData);
 
-		const existingLeaveType = existingData.leaveType;
-		const extractedLeaveType = extractedData.leaveType;
-
-		if (
-			existingLeaveType &&
-			extractedLeaveType &&
-			existingLeaveType !== extractedLeaveType
-		) {
-			logger.info(
-				'Extractor: Leave type changed from',
-				existingLeaveType,
-				'to',
-				extractedLeaveType
-			);
-
-			const oldConfig = leaveConfig[existingLeaveType];
-			const newConfig = leaveConfig[extractedLeaveType];
-
-			if (oldConfig && newConfig) {
-				const oldParams = [
-					...oldConfig.mandatoryParams,
-					...oldConfig.optionalParams,
-				];
-				const newParams = [
-					...newConfig.mandatoryParams,
-					...newConfig.optionalParams,
-				];
-
-				// Map common fields
-				const commonFields = oldParams.filter((oldParam) =>
-					newParams.some((newParam) => newParam.name === oldParam.name)
-				);
-
-				commonFields.forEach((field) => {
-					if (existingData[field.name] !== undefined) {
-						extractedData[field.name] = existingData[field.name];
-					}
-				});
-
-				// Remove old fields that are not in the new config
-				Object.keys(existingData).forEach((key) => {
-					if (
-						!newParams.some((param) => param.name === key) &&
-						key !== 'leaveType'
-					) {
-						delete existingData[key];
-					}
-				});
-			}
-
-			// Reset paramsPopulated flag
-			delete extractedData.paramsPopulated;
-		}
+		// Post-processing step to remove any potentially assumed dates
+		// const extractedData = removeAssumedDates(extractedData, userMessage);
+		logger.info('Extractor: Cleaned extracted data', extractedData);
 
 		// Modify the merging process
-		logger.info('Extractor: Merging data');
 		const mergedData = { ...existingData };
 		Object.keys(extractedData).forEach((key) => {
 			if (extractedData[key] !== null) {
 				mergedData[key] = extractedData[key];
 			}
 		});
+
+		// Only use date interpretation if specific dates are provided
+		if (dateInfo.interpretedStartDate) {
+			mergedData.startDate = dateInfo.interpretedStartDate;
+		}
+		if (dateInfo.interpretedEndDate) {
+			mergedData.endDate = dateInfo.interpretedEndDate;
+		}
+
 		logger.info('Extractor: Merged data', mergedData);
 
 		// Calculate working days only if both dates are present
@@ -233,7 +103,6 @@ DO NOT use the current date or make any assumptions about dates. Only extract da
 		}
 
 		// Update the context with the merged data
-		logger.info('Extractor: Updating context with merged data');
 		ctxManager.setExtractedInfo(mergedData);
 
 		// Update null extracted info
@@ -279,7 +148,6 @@ DO NOT use the current date or make any assumptions about dates. Only extract da
 		}
 
 		// If extraction is complete, transition to prompt
-		logger.info('Extractor: Transitioning to next state');
 		ctxManager.transition('prompt');
 		done();
 	},
@@ -288,14 +156,14 @@ DO NOT use the current date or make any assumptions about dates. Only extract da
 function generateExtractionPreamble(existingData, userProfile) {
 	let preamble = `You are an AI assistant for an HRMS Leave Management system. Your task is to extract ONLY explicitly mentioned information from the user's query about a single leave request. Do not make any assumptions or inferences.
 
-	INSTRUCTIONS:
-	- WHILE HANDLING DATES CONSIDER ONLY THE WORKING DAYS i.e. MONDAY TO FRIDAY. IF THE USER IS ASKING TO TAKE LEAVE ON A WEEKEND, ADJUST THE DATE TO THE NEAREST WORKING DAY.
-	- DO NOT CREATE NEW KEY FIELDS (RESTRICTED TO EXISTING KEYS).
-	- HANDLE THE CASES WHERE THE USER MENTIONS THE SAME DATE FOR START AND END DATES.
-	- HANDLE THE CASE WHERE THE USER MIGHT BE ASKING FOR HALF DAY LEAVE.
-	- IF THE USER IS ASKING TO TAKE HALF DAY LEAVE, CHECK THE START DAY TYPE AND END DAY TYPE PARAMETERS. UPDATE THEM ACCORDINGLY. TRUE FOR FULL DAY, FALSE FOR HALF DAY.
-	- CONSIDER THE USER'S PROFILE WHEN EXTRACTING INFORMATION, ESPECIALLY FOR LEAVE TYPES AND DESTINATIONS.
-	- USE CAMEL CASE FOR THE KEYS like leaveType, startDate, endDate, etc.
+	INSTRUCTIONS: WHILE HANDLING DATES CONSIDER ONLY THE WORKING DAYS i.e. MONDAY TO FRIDAY. IF THE USER IS ASKING TO TAKE LEAVE ON A WEEKEND, IGNORE THE REQUEST.
+
+	IMPORTANT: DO NOT CREATE NEW KEY FIELDS (RESTRICTED TO EXISTING KEYS).
+	IMPORTANT: HANDLE THE CASES WHERE THE USER MENTIONS THE SAME DATE FOR START AND END DATES.
+	IMPORTANT: HANDLE THE CASE WHERE THE USER MIGHT BE ASKING FOR HALF DAY LEAVE.
+	IMPORTANT: IF THE USER IS ASKING TO TAKE HALF DAY LEAVE, CHECK THE START DAY TYPE AND END DAY TYPE PARAMETERS. UPDATE THEM ACCORDINGLY. TRUE FOR FULL DAY, FALSE FOR HALF DAY.
+	IMPORTANT: CONSIDER THE USER'S PROFILE WHEN EXTRACTING INFORMATION, ESPECIALLY FOR LEAVE TYPES AND DESTINATIONS.
+	IMPORTANT: USE CAMEL CASE FOR THE KEYS like leaveType, startDate, endDate, etc.
 
 	Extract ONLY the following parameters if EXPLICITLY mentioned:
 
@@ -306,6 +174,11 @@ function generateExtractionPreamble(existingData, userProfile) {
 	5. End Day Type: Whether the end date is a full day or half day, ONLY if explicitly mentioned.
 
 	IF NO PARAMETERS ARE EXPLICITLY MENTIONED, JUST PROVIDE AN EMPTY JSON OBJECT i.e. {}.
+
+
+
+	User Profile:
+	${JSON.stringify(userProfile)}
 	`;
 
 	console.log('Extractor: Existing leave type', existingData);

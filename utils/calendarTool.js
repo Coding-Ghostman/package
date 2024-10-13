@@ -1,4 +1,5 @@
 const moment = require('moment');
+const { chat } = require('./chat');
 
 class CalendarTool {
 	constructor(config = {}) {
@@ -8,81 +9,98 @@ class CalendarTool {
 	}
 
 	/**
-	 * Interprets various date-related queries in natural language
+	 * Interprets various date-related queries in natural language using LLM
 	 * @param {string} query - Natural language query about dates
 	 * @returns {Object} Interpreted date information
 	 */
-	interpretDateQuery(query) {
+	async interpretDateQuery(query) {
 		const normalizedQuery = query.toLowerCase().trim();
 		const response = {
 			originalQuery: query,
 			currentDate: this.currentDate.format('YYYY-MM-DD'),
-			interpretedDate: null,
-			relativeDate: null,
+			interpretedStartDate: null,
+			interpretedEndDate: null,
 			description: '',
+			relativeDate: null,
 			error: null,
 		};
 
+		// Define keywords that indicate date-related queries
+		const dateKeywords = ['today', 'tomorrow', 'yesterday', 'next', 'last', 'this', 'week', 'month', 'year', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+
+		// Check if the query contains any date-related keywords
+		const containsDateKeyword = dateKeywords.some(keyword => normalizedQuery.includes(keyword));
+
+		// If the query doesn't contain any date-related keywords, return the response without interpretation
+		if (!containsDateKeyword) {
+			return response;
+		}
+
 		try {
-			// Handle specific date formats
-			const dateRegex = /(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})/;
-			const match = normalizedQuery.match(dateRegex);
-			if (match) {
-				const [, day, month, year] = match;
-				const parsedDate = moment(`${year}-${month}-${day}`, 'YYYY-MM-DD');
-				if (parsedDate.isValid()) {
-					response.interpretedDate = parsedDate;
-					response.description = 'Specific date mentioned';
-				}
+			// Generate the next 60 days calendar
+			let calendarDays = '';
+			for (let i = 0; i < 60; i++) {
+				const day = this.currentDate.clone().add(i, 'days');
+				calendarDays += `${day.format('YYYY-MM-DD')} (${day.format('dddd')})\n`;
 			}
 
-			// Handle relative date queries
-			if (!response.interpretedDate) {
-				if (normalizedQuery.includes('today')) {
-					response.interpretedDate = this.currentDate.clone();
-					response.description = 'Today';
-				} else if (normalizedQuery.includes('tomorrow')) {
-					response.interpretedDate = this.currentDate.clone().add(1, 'day');
-					response.description = 'Tomorrow';
-				} else if (normalizedQuery.includes('next week')) {
-					response.interpretedDate = this.currentDate.clone().add(1, 'week').startOf('week');
-					response.description = 'Start of next week';
-				} else if (normalizedQuery.includes('next month')) {
-					response.interpretedDate = this.currentDate.clone().add(1, 'month').startOf('month');
-					response.description = 'Start of next month';
-				} else if (normalizedQuery.includes('next working day')) {
-					response.interpretedDate = this.getNextWorkingDay(this.currentDate.clone());
-					response.description = 'Next working day';
-				}
+			const prompt = `
+Interpret the following date-related query and provide a structured response:
+Query: "${query}"
+Current date: ${this.currentDate.format('YYYY-MM-DD')}
+
+Calendar for the next 60 days:
+${calendarDays}
+
+IMPORTANT RULES:
+1. Only consider weekdays (Monday to Friday) for leave periods.
+2. Weekends (Saturday and Sunday) are not included in leave periods.
+3. The "first week" of a month starts on the first Monday of that month and ends on the following Friday.
+4. If a date falls on a weekend, adjust it to the next available weekday.
+5. For multi-day leave periods, always start on a Monday and end on a Friday.
+6. DO NOT assume any dates if they are not explicitly mentioned in the query.
+7. If the query is about a future month or week, make sure to interpret it correctly.
+8. If no specific dates or relative time periods are mentioned, return null for both interpretedStartDate and interpretedEndDate.
+
+Provide the interpretation in the following JSON format:
+{
+  "interpretedStartDate": "YYYY-MM-DD",
+  "interpretedEndDate": "YYYY-MM-DD",
+  "description": "Brief description of the interpreted date range",
+  "relativeDate": "Relative description if applicable (e.g., 'next Monday', 'first week of next month')"
+}
+
+If no specific dates can be determined from the query, set interpretedStartDate and interpretedEndDate to null.
+Ensure that the interpretedStartDate and interpretedEndDate strictly follow the rules above.
+`;
+
+			const chatResponse = await chat(prompt, {
+				maxTokens: 300,
+				temperature: 0,
+			});
+
+			const interpretation = JSON.parse(chatResponse.chatResponse.text);
+
+			// Merge the LLM interpretation with our response object
+			Object.assign(response, interpretation);
+
+			// Convert interpretedStartDate and interpretedEndDate to moment objects if they exist
+			if (response.interpretedStartDate) {
+				response.startDate = moment(response.interpretedStartDate);
+				response.startDateFormatted = this.formatDateInWords(response.startDate);
+				response.startDateIso8601 = response.startDate.format('YYYY-MM-DD');
 			}
 
-			// Add formatted dates to response if a date was interpreted
-			if (response.interpretedDate) {
-				response.formattedDate = this.formatDateInWords(response.interpretedDate);
-				response.iso8601 = response.interpretedDate.format('YYYY-MM-DD');
-				response.dayOfWeek = response.interpretedDate.format('dddd');
-				response.isWorkingDay = this.isWorkingDay(response.interpretedDate);
-			}
-
-			// Handle duration queries
-			const durationMatch = normalizedQuery.match(/(\d+)\s*(day|week|month)/);
-			if (durationMatch) {
-				const [, amount, unit] = durationMatch;
-				response.duration = {
-					amount: parseInt(amount),
-					unit: unit + (amount > 1 ? 's' : ''),
-				};
-				response.endDate = response.interpretedDate
-					? response.interpretedDate.clone().add(amount, unit)
-					: this.currentDate.clone().add(amount, unit);
+			if (response.interpretedEndDate) {
+				response.endDate = moment(response.interpretedEndDate);
 				response.endDateFormatted = this.formatDateInWords(response.endDate);
 				response.endDateIso8601 = response.endDate.format('YYYY-MM-DD');
-				response.workingDays = this.getWorkingDays(
-					response.interpretedDate || this.currentDate,
-					response.endDate
-				);
 			}
 
+			// Calculate working days if both start and end dates are present
+			if (response.startDate && response.endDate) {
+				response.workingDays = this.getWorkingDays(response.startDate, response.endDate);
+			}
 		} catch (error) {
 			response.error = `Failed to interpret date query: ${error.message}`;
 		}

@@ -101,56 +101,28 @@ async function determineInitialAction(
 	const logger = ctxManager.context.logger();
 	logger.info('determineInitialAction: Started');
 
-	const routingPreamble = `You are an intelligent Routing Assistant for a HRMS Leave Management Framework. Your task is to determine the next action based on the user query, previous action, extracted information, and user profile for a single leave request.
+	const routingPreamble = `You are an intelligent Routing Assistant for a HRMS Leave Management Framework. Your task is to determine the next action based on the user query, extracted information, and user profile for a single leave request.
 
-Instructions:
-1. Analyze the user query prioritizing the following aspects:
-   - Primary intent (applying leave, checking status, seeking information)
-   - Temporal context (new request, modification, or follow-up)
-   - Information completeness (what details are provided vs. missing)
+  Instructions:
+  1. Analyze the user query for information related to the current leave request, user profile inquiries, or potential interruptions.
+  2. Consider the following parameters: leave type, start date, end date, and user profile information.
+  3. Respond ONLY with one of the following actions:
+     - "extraction": if there is new information to extract or update for the current request.
+     - "prompt": if more information is needed from the user for the current request.
+     - "confirmation": if all necessary information is present and ready for confirmation.
+     - "cancel": if the user wants to cancel the current request or start over.
+     - "interruption": if the user's query is unrelated to the leave request process or requires clarification before continuing or answer greeting and general Questions.
+		 - "policy": if the user is asking about the policy related to leave requests.
 
-2. Mandatory Parameters for Leave Request:
-   - Leave type (sick, vacation, personal, etc.)
-   - Start date (YYYY-MM-DD format)
-   - End date (YYYY-MM-DD format)
+  Remember: Your response must be ONLY one of the above actions. Do not provide any explanations or additional text. We are handling only one leave request at a time.`;
 
-3. Action Decision Logic:
-   First check if query matches any of these conditions in order:
-   a) Contains "cancel" or reset intentions → return "cancel"
-   b) Asks about leave balance or profile → return "profileCheck"
-   c) Questions about policies/rules → return "policy"
-   d) Unrelated to leave management → return "interruption"
-   
-   Then, for leave request processing:
-   e) If new information present in query → return "extraction"
-   f) If mandatory fields incomplete → return "prompt"
-   g) If all mandatory fields present → return "confirmation"
+	const prompt = `User Query: ${userMessage}
+    Prompt That was provided to User: ${ctxManager.getTestResponse()}
+    Extracted Information: ${JSON.stringify(extractedInfo)}
+    Previous Action: ${previousAction}
+    User Profile: ${JSON.stringify(userProfile)}
 
-4. Return EXACTLY one of these actions:
-   - "extraction": When new leave-related information is detected in the query
-   - "prompt": When specific mandatory information is missing
-   - "confirmation": When all required information is present and validation needed
-   - "cancel": When user wants to cancel/restart the process
-   - "interruption": When query is unrelated to leave management
-   - "profileCheck": When querying leave balance or profile details
-   - "policy": When asking about leave policies or validation rules
-
-Remember: 
-- Respond ONLY with one action word
-- Handle one leave request at a time
-- Previous action context is crucial for maintaining conversation flow
-- Prioritize explicit user intentions over implicit ones`;
-
-	const prompt = `
-${routingPreamble}
-
-Context:
-User Query: ${userMessage}
-Extracted Information: ${JSON.stringify(extractedInfo)}
-Previous Action Prompt: ${ctxManager.getTestResponse()}
-Previous Action: ${previousAction}
-
-Based on the above context, determine the single most appropriate next action.`;
+  Based on the user query, extracted information, previous action, user profile, and conversation history, determine the next action for the current leave request, user profile inquiry, or potential interruption.`;
 
 	logger.info('determineInitialAction: Sending chat request');
 	const response = await chat(prompt, {
@@ -163,7 +135,7 @@ Based on the above context, determine the single most appropriate next action.`;
 			},
 			{
 				title: 'Annual',
-				text: 'The employee is entitled to take annual leave at their discretion without giving a particular reason. The purpose is simply to give them a break from work. This time might also be referred to as vacation, Personal Time Off (PTO), or annual leave.',
+				text: 'The employee is entitled to take 20 days annual leave at their discretion without giving a particular reason. The purpose is simply to give them a break from work. This time might also be referred to as vacation, Personal Time Off (PTO), or annual leave.',
 			},
 			{
 				title: 'Remote',
@@ -183,9 +155,9 @@ async function determineFinalAction(ctxManager, currentAction) {
 	const logger = ctxManager.context.logger();
 	logger.info('determineFinalAction: Started');
 	const extractedInfo = ctxManager.getExtractedInfo();
-	const { leaveType } = extractedInfo;
+	const { leaveType, startDate, endDate } = extractedInfo;
 
-	if (leaveType) {
+	if (leaveType && startDate && endDate) {
 		const config = ctxManager.getLeaveTypeConfig(leaveType);
 		if (config) {
 			const missingMandatoryParams = config.mandatoryParams.filter(
@@ -269,21 +241,21 @@ async function handleInterruption(ctxManager, userMessage) {
 		}
 	}
 
-	const interruptionPreamble = `You are an AI assistant handling an interruption in a leave request process. Your task is to respond to the user's query and guide them back to the leave request process or confirm if they want to exit.
+	const interruptionPreamble = `You are an AI assistant handling interruptions, greetings, and general inquiries in an HRMS Leave Management system. Your task is to respond to the user's query and guide them back to the leave request process if necessary.
 
-	Instructions:
-	1. Briefly acknowledge the user's query or interruption.
-	2. If the leave type has changed, mention this change and ask if they want to continue with the new leave type.
-	3. If the leave type hasn't changed, ask if they want to continue with the current leave request or exit the process.
-	4. Keep the response friendly and conversational.
-	5. Limit the response to 40 words or less.
-	6. Don't try to answer questions outside the HR-related context.
-	`;
+Instructions:
+1. Briefly acknowledge the user's query, greeting, or interruption.
+2. Keep the response friendly, professional, and conversational.
+3. Limit the response to 40 words or less.
+4. Only answer questions related to HR, leave management, or general work policies.
+5. For queries outside the HRMS context, politely redirect the user to the appropriate department or resource.
+6. If appropriate, guide the user back to the leave request process or ask if they want to continue.
+7. Do not provide any personal opinions or advice outside of established HR policies.`;
 
 	const interruptionPrompt = `User Query: ${userMessage}
-  Old Leave Type: ${oldLeaveType}
-  New Leave Type: ${newLeaveType}
   Extracted Info: ${JSON.stringify(updatedExtractedInfo)}
+	User Profile: ${JSON.stringify(ctxManager.getUserProfile())}
+
 
   Respond to the user's query, acknowledge any changes in leave type, and ask if they want to continue with the leave request process or exit.`;
 
@@ -291,6 +263,7 @@ async function handleInterruption(ctxManager, userMessage) {
 		maxTokens: 200,
 		temperature: 0.7,
 		preambleOverride: interruptionPreamble,
+		chatHistory: ctxManager.getConversationHistory(),
 	});
 
 	logger.info(

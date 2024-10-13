@@ -74,7 +74,7 @@ class ContextManager {
 
 	getConversationHistory() {
 		const history = this.context.variable('user.conversationHistory') || [];
-		return history.slice(-10); // Return only the latest 15 messages
+		return history.slice(-7); // Return only the latest 15 messages
 	}
 
 	clearConversationHistory() {
@@ -138,6 +138,18 @@ class ContextManager {
 			(key) => key.toLowerCase() === leaveType.toLowerCase()
 		);
 		return normalizedLeaveType ? leaveConfig[normalizedLeaveType] : null;
+	}
+
+	setDateInterpretation(interpretation) {
+		this.context.setVariable(
+			'user.dateInterpretation',
+			JSON.stringify(interpretation)
+		);
+	}
+
+	getDateInterpretation() {
+		const interpretation = this.context.variable('user.dateInterpretation');
+		return interpretation ? JSON.parse(interpretation) : null;
 	}
 }
 
