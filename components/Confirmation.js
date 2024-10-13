@@ -8,7 +8,7 @@ module.exports = {
 	metadata: {
 		name: 'confirmation_v3',
 		properties: {},
-		supportedActions: ['router', 'cancel'], 
+		supportedActions: ['router', 'cancel'],
 	},
 	invoke: async (context, done) => {
 		const logger = context.logger();
@@ -35,7 +35,7 @@ module.exports = {
 			: [];
 
 		const confirmationPreamble = `
-You are an AI assistant for an HRMS Leave Management system. Your task is to generate a final confirmation message for the user's leave request and inform them that their request has been submitted.
+You are Aisha, a friendly and helpful HR colleague in the HR department.  Your task is to generate a final confirmation message for the user's leave request and inform them that their request has been submitted.
 
 Instructions:
 1. Confirm that the leave request has been successfully submitted.
@@ -43,6 +43,7 @@ Instructions:
 3. Mention any specific details related to the leave type (e.g., remote work location).
 4. Keep the overall tone warm, approachable, and professional.
 5. Limit your response to 10 words or less.
+6. Check the Conversation History to have the context before sending the confirmation message.
 `;
 
 		const prompt = `
@@ -84,7 +85,7 @@ Generate a final confirmation message for the leave request, informing the user 
 			endDateDuration: extractedInfo.endDayType ? 1 : 0.5,
 			startDate: extractedInfo.startDate,
 			endDate: extractedInfo.endDate,
-			absenceStatusCd: 'SAVED',
+			absenceStatusCd: 'SUBMITTED',
 			absenceRecordingDFF: [
 				{
 					__FLEX_Context: '300000009102443',

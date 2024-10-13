@@ -74,7 +74,7 @@ class ContextManager {
 
 	getConversationHistory() {
 		const history = this.context.variable('user.conversationHistory') || [];
-		return history.slice(-7); // Return only the latest 7 messages
+		return history.slice(-15); // Return only the latest 15 messages
 	}
 
 	clearConversationHistory() {

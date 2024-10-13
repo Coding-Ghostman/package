@@ -3,14 +3,15 @@ async function chat(message, options = {}) {
 	const fetch = require('node-fetch');
 	const { Headers } = fetch;
 
-	const configurationFilePath = '/home/fn/.oci/config';
-	// const configurationFilePath = '~/.oci_dmcc/config';
+	// const configurationFilePath = '/home/fn/.oci/config';
+	const configurationFilePath = '~/.oci_dmcc/config';
 	const configProfile = 'DEFAULT';
 
 	const provider = new common.ConfigFileAuthenticationDetailsProvider(
 		configurationFilePath,
 		configProfile
 	);
+	
 	const {
 		chatHistory = [],
 		docs = [],

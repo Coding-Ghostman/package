@@ -7,7 +7,7 @@ module.exports = {
 	metadata: {
 		name: 'extractor_v3',
 		properties: {},
-		supportedActions: ['router', 'prompt'],
+		supportedActions: ['prompt', 'extraction'],
 	},
 	invoke: async (context, done) => {
 		const logger = context.logger();
