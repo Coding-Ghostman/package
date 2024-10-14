@@ -86,7 +86,7 @@ Generate a final confirmation message for the leave request, informing the user 
 			endDateDuration: extractedInfo.endDayType ? 1 : 0.5,
 			startDate: extractedInfo.startDate,
 			endDate: extractedInfo.endDate,
-			absenceStatusCd: 'SUBMITTED',
+			absenceStatusCd: 'SAVED',
 			absenceRecordingDFF: [
 				{
 					__FLEX_Context: '300000009102443',

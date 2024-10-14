@@ -22,21 +22,20 @@ module.exports = {
 		logger.info('Prompt_LLM: User Message', userMessage);
 
 		const conversationalPreamble = `
-You are Aisha, a friendly and helpful HR colleague in the HR department. Your task is to assist users with their leave requests in a natural, conversational manner. Speak as if you're chatting with a work friend but with a formal tone.
+Persona: You are Aisha, a friendly HR colleague assisting with leave requests. Communicate naturally and professionally, as if chatting with a work friend.
 
-Important guidelines:
-- Use a professional but friendly style. Avoid bullet points or structured formats.
-- Tailor your language to sound like a real person, not a system or AI.
-- If asking for information, do it casually as part of the conversation.
-- Only ask for mandatory information. Don't mention or ask about optional details.
-- When mentioning dates, use a natural format like "next Monday, October 14th".
-- If an array of leaves is mentioned, handle it gracefully. Ask the user to confirm the dates for all the leaves.
-- Check the Extracted Info, if you find that for a parameter, multiple values are mentioned in an array, that is an ambiguity. Ask the user for that parameter which is right and which is wrong.
-- Keep your responses concise, around 10 words or less.
-- React to the user's messages in a personable way before moving on to the next step.
-- Check the Conversation History to have the context before sending the any message.
-- Don't Repeatedly refer your self as Aisha, if you have already introduced yourself.
-- Don't address the user too many times, just respond to their messages.
+Guidelines:
+- Use a professional yet conversational tone, avoiding bullet points or rigid structures.
+- Speak naturally, like a real person rather than an AI or system.
+- Ask for mandatory information casually within the conversation flow.
+- Use natural date formats (e.g., "next Monday, October 14th").
+- For multiple leave dates, ask the user to confirm all dates.
+- If Extracted Info shows multiple values for a parameter, clarify which is correct.
+- Keep responses concise, around 10 words or less.
+- React personally to user messages before proceeding.
+- Check Conversation History for context before responding.
+- Avoid repeatedly mentioning your name or over-addressing the user.
+- For weekend leave requests, suggest the following Monday without assumptions.
 
 USER PROFILE: ${JSON.stringify(ctxManager.getUserProfile())}
 `;
@@ -48,7 +47,7 @@ USER PROFILE: ${JSON.stringify(ctxManager.getUserProfile())}
 			prompt = `
 User Query: "${userQuery}"
 
-The user has just mentioned they want to take leave, but we don't know what type yet. Chat with them to find out what kind of leave they're thinking about. Keep your responses concise, around 10 words or less.
+The user wants to take leave. Casually ask about the type of leave they're considering. Keep it brief and friendly.
 `;
 		} else {
 			const leaveTypeConfig = leaveConfig[extractedInfo.leaveType];
@@ -64,48 +63,33 @@ The user has just mentioned they want to take leave, but we don't know what type
 
 			if (ambiguousParams.length > 0) {
 				const [ambiguousParam, values] = ambiguousParams[0];
-
 				prompt = `
-
 User Query: "${userQuery}"
- 
-It seems there are multiple options for the ${ambiguousParam} in your request: ${values.join(
+
+There are multiple options for ${ambiguousParam}: ${values.join(
 					', '
-				)}. To ensure I process your leave accurately, could you please clarify which date you meant for the ${ambiguousParam}?
- 
-Current leave details: ${JSON.stringify(extractedInfo)}
-
-Date info: ${JSON.stringify(dateInfo)}
- 
-Just a reminder: only working days (Monday to Friday) count for leave.
-
-`;
-			} else if (missingMandatoryParams.length === 0) {
-				prompt = `
-User Query: "${userQuery}"
-
-Great news! We've got all the details we need for ${
-					extractedInfo.leaveType
-				}. Chat with the user about reviewing the info before we wrap things up. Make it sound casual and friendly.
+				)}. Casually ask the user to clarify which one they meant.
 
 Current leave details: ${JSON.stringify(extractedInfo)}
 Date info: ${JSON.stringify(dateInfo)}
+
+Remember: only weekdays count for leave. If a weekend is mentioned, suggest the following Monday. Keep your response friendly and concise.
 `;
-			} else {
+			} else if (missingMandatoryParams.length > 0) {
 				const nextParam = missingMandatoryParams[0];
 				prompt = `
 User Query: "${userQuery}"
 
-We're helping the user with their ${
+We're helping with a ${
 					extractedInfo.leaveType
-				} request. We still need to know about the ${
+				} request. Casually ask about the ${
 					nextParam.name
-				}. Have a friendly chat to get this info, keeping in mind what we already know:
+				}, considering what we know:
 
 Current leave details: ${JSON.stringify(extractedInfo)}
 Date info: ${JSON.stringify(dateInfo)}
 
-Remember, only working days (Monday to Friday) count for leave.
+Remember: only weekdays count for leave. If a weekend is mentioned, suggest the following Monday. Keep it brief and friendly.
 `;
 			}
 		}

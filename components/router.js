@@ -10,7 +10,7 @@ module.exports = {
 			'prompt',
 			'confirmation',
 			'cancel',
-			'policy',
+			'summary',
 		],
 	},
 	invoke: async (context, done) => {
@@ -40,24 +40,10 @@ module.exports = {
 		);
 		logger.info(`Router: Initial action - ${initialAction}`);
 
-		// Step 2: Handle profile check
-		if (initialAction === 'profilecheck') {
-			logger.info('Router: Handling profile check');
-			await handleProfileCheck(ctxManager, userProfile);
-			ctxManager.transition('router');
-			done();
-			return;
-		}
-
 		// Step 3: Handle interruption
 		if (initialAction === 'interruption') {
-			logger.info('Router: Handling interruption');
-			const interruptionResponse = await handleInterruption(
-				ctxManager,
-				userMessage
-			);
-			ctxManager.reply(interruptionResponse);
-			ctxManager.transition('router');
+			logger.info('Router: Handling interruption or Policy');
+			ctxManager.transition('policy');
 			done();
 			return;
 		}
@@ -69,9 +55,11 @@ module.exports = {
 			ctxManager.transition('extraction');
 			done();
 			return;
-		} else if (currentAction === 'policy') {
-			logger.info('Router: Handling policy search');
-			ctxManager.transition('policy');
+		}
+
+		if (currentAction === 'summary') {
+			logger.info('Router: Handling summary');
+			ctxManager.transition('summary');
 			done();
 			return;
 		}
@@ -108,10 +96,9 @@ async function determineInitialAction(
   3. Respond ONLY with one of the following actions:
      - "extraction": if there is new information to extract or update for the current request.
      - "prompt": if more information is needed from the user for the current request.
-     - "confirmation": if all necessary information is present and ready for confirmation.
-     - "cancel": if the user wants to cancel the current request or start over.
-     - "interruption": if the user's query is unrelated to the leave request process or answer greeting and general Questions.
-		 - "policy": if the user is asking about the policy related to leave requests or anything related to self validation like "Can I apply for this leave type?" or you feel like the answer is not related to the leave request but related to HR policies.
+     - "summary": if all necessary information is present and ready for confirmation.
+     - "cancel": If the user wants to cancel the current request or start over.
+     - "interruption": If the user's query is unrelated to the leave request process or answer greeting and general Questions or If the user is asking about the policy related to leave requests or anything related to self validation like "Can I apply for this leave type?" or you feel like the answer is not related to the leave request but related to HR policies or any questions related to DMCC Company.
 
   Remember: Your response must be ONLY one of the above actions. Do not provide any explanations or additional text. We are handling only one leave request at a time.`;
 
@@ -174,7 +161,7 @@ async function determineFinalAction(ctxManager, currentAction) {
 				logger.info(
 					'determineFinalAction: All mandatory info present, returning confirmation'
 				);
-				return 'confirmation';
+				return 'summary';
 			}
 		}
 	}

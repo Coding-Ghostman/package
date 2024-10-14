@@ -19,7 +19,7 @@ class CalendarTool {
 		const normalizedQuery = query.toLowerCase().trim();
 		const response = {
 			originalQuery: query,
-			currentDate: this.currentDate.format('YYYY-MM-DD'),
+			currentDate: `${this.currentDate.format('YYYY-MM-DD')} (${this.currentDate.format('dddd')})`,
 			interpretedStartDate: null,
 			interpretedEndDate: null,
 			description: '',
@@ -58,11 +58,18 @@ class CalendarTool {
 		}
 
 		try {
-			// Generate the next 60 days calendar
+			// Generate the next 60 days calendar (weekdays only)
 			let calendarDays = '';
-			for (let i = 0; i < 60; i++) {
-				const day = this.currentDate.clone().add(i, 'days');
-				calendarDays += `${day.format('YYYY-MM-DD')} (${day.format('dddd')})\n`;
+			let daysAdded = 0;
+			let currentDay = this.currentDate.clone();
+			while (daysAdded < 60) {
+				if (this.isWorkingDay(currentDay)) {
+					calendarDays += `${currentDay.format(
+						'YYYY-MM-DD'
+					)} (${currentDay.format('dddd')})\n`;
+					daysAdded++;
+				}
+				currentDay.add(1, 'day');
 			}
 
 			const prompt = `
@@ -70,7 +77,7 @@ Interpret the following date-related query and provide a structured response:
 Query: "${query}"
 Current date: ${this.currentDate.format('YYYY-MM-DD')}
 
-Calendar for the next 60 days:
+Calendar for the next 60 weekdays:
 ${calendarDays}
 
 IMPORTANT RULES:
@@ -83,26 +90,32 @@ IMPORTANT RULES:
 7. If the query is about a future month or week, make sure to interpret it correctly.
 8. If no specific dates or relative time periods are mentioned, return null for both interpretedStartDate and interpretedEndDate.
 9. If MULTIPLE LEAVES ARE MENTIONED AND IT CREATES AMBIGUITY, WHERE BOTH THE DATES CAN BE USED FOR A SINGLE DATE PARAMETER, ADD BOTH THE DATES IN AN ARRAY.
-10. When a user submits a request that includes a date but it’s ambiguous or unclear, the system must gracefully inform the user of the confusion and ask for clarification. This approach ensures that the user feels supported and can provide the necessary details without frustration.
-Example prompt for users:	
-"I’m a bit unclear about the date you mentioned. Could you please specify which date you’d like to take leave? For example, if you meant 'tomorrow,' please confirm the exact date or if there's a different date you're referring to. Your clarification will help me process your request accurately!"
+10. When a user submits a request that includes a date but it's ambiguous or unclear, the system must gracefully inform the user of the confusion and ask for clarification.
+11. If a user mentions a weekend date, adjust it to the next available weekday.
+
+Example prompt for users when clarification is needed:	
+"I'm a bit unclear about the date you mentioned. Could you please specify which weekday you'd like to take leave? For example, if you meant 'this Saturday,' I'll interpret that as the following Monday. Your clarification will help me process your request accurately!"
 
 Provide the interpretation in the following JSON format:
 {
   "interpretedStartDate": "YYYY-MM-DD",
   "interpretedEndDate": "YYYY-MM-DD",
   "description": "Brief description of the interpreted date range",
-  "relativeDate": "Relative description if applicable (e.g., 'next Monday', 'first week of next month')"
+  "relativeDate": "Relative description if applicable (e.g., 'next Monday', 'first week of next month')",
+  "needsClarification": boolean,
+  "clarificationMessage": "Message asking for clarification if needed"
 }
 
 If no specific dates can be determined from the query, set interpretedStartDate and interpretedEndDate to null.
 Ensure that the interpretedStartDate and interpretedEndDate strictly follow the rules above.
 `;
+
 			const chatResponse = await chat(prompt, {
 				maxTokens: 300,
 				temperature: 0,
 				useLlama: this.useLlama,
 			});
+
 			let interpretation = null;
 			if (this.useLlama) {
 				const rawContent =
@@ -136,20 +149,27 @@ Ensure that the interpretedStartDate and interpretedEndDate strictly follow the 
 
 			// Merge the LLM interpretation with our response object
 			Object.assign(response, interpretation);
-			console.log('Callendar Tool: RESPONSE: ', response);
-			// Convert interpretedStartDate and interpretedEndDate to moment objects if they exist
+			console.log('Calendar Tool: RESPONSE: ', response);
+
+			// Adjust dates to next available weekday if they fall on a weekend
 			if (response.interpretedStartDate) {
-				response.startDate = moment(response.interpretedStartDate);
+				response.startDate = this.adjustToWeekday(
+					moment(response.interpretedStartDate)
+				);
 				response.startDateFormatted = this.formatDateInWords(
 					response.startDate
 				);
 				response.startDateIso8601 = response.startDate.format('YYYY-MM-DD');
+				response.interpretedStartDate = response.startDateIso8601;
 			}
 
 			if (response.interpretedEndDate) {
-				response.endDate = moment(response.interpretedEndDate);
+				response.endDate = this.adjustToWeekday(
+					moment(response.interpretedEndDate)
+				);
 				response.endDateFormatted = this.formatDateInWords(response.endDate);
 				response.endDateIso8601 = response.endDate.format('YYYY-MM-DD');
+				response.interpretedEndDate = response.endDateIso8601;
 			}
 
 			// Calculate working days if both start and end dates are present
@@ -164,6 +184,18 @@ Ensure that the interpretedStartDate and interpretedEndDate strictly follow the 
 		}
 
 		return response;
+	}
+
+	/**
+	 * Adjusts a date to the next available weekday if it falls on a weekend
+	 * @param {moment.Moment} date - Date to adjust
+	 * @returns {moment.Moment}
+	 */
+	adjustToWeekday(date) {
+		while (!this.isWorkingDay(date)) {
+			date.add(1, 'day');
+		}
+		return date;
 	}
 
 	/**

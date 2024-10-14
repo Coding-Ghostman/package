@@ -1,6 +1,6 @@
 const { chat } = require('../utils/chat');
 const ContextManager = require('./ContextManager');
-const CalendarTool = require('../utils/calendarTool');
+const IntentAnalyzer = require('./IntentAnalyzer');
 
 module.exports = {
 	metadata: {
@@ -57,16 +57,10 @@ Chat with the user to summarize their leave request and casually ask if everythi
 		ctxManager.setTestResponse(result);
 		ctxManager.reply(result);
 
-		// Handle user response
-		if (
-			userMessage.toLowerCase().includes('confirm') ||
-			userMessage.toLowerCase().includes('yes') ||
-			userMessage.toLowerCase().includes('looks good')
-		) {
-			ctxManager.transition('confirmation');
-		} else {
-			ctxManager.transition('router');
-		}
+		// Replace the hard-coded user response handling with IntentAnalyzer
+		const intentAnalyzer = new IntentAnalyzer(context);
+		const nextTransition = await intentAnalyzer.analyzeIntent(userMessage);
+		ctxManager.transition(nextTransition);
 
 		ctxManager.addToConversationHistory('CHATBOT', result);
 
