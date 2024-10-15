@@ -57,13 +57,6 @@ module.exports = {
 			return;
 		}
 
-		if (currentAction === 'summary') {
-			logger.info('Router: Handling summary');
-			ctxManager.transition('summary');
-			done();
-			return;
-		}
-
 		// Step 5: Determine final action
 		logger.info('Router: Determining final action');
 		const finalAction = await determineFinalAction(ctxManager, currentAction);
@@ -88,7 +81,8 @@ async function determineInitialAction(
 	const logger = ctxManager.context.logger();
 	logger.info('determineInitialAction: Started');
 
-	const routingPreamble = `You are an intelligent Routing Assistant for a HRMS Leave Management Framework. Your task is to determine the next action based on the user query andextracted information for a single leave request.
+	const routingPreamble = `<|begin_of_text|><|start_header_id|>system<|end_header_id|>
+You are an intelligent Routing Assistant for a HRMS Leave Management Framework. Your task is to determine the next action based on the user query andextracted information for a single leave request.
 
   Instructions:
   1. Analyze the user query for information related to the current leave request or potential interruptions.
@@ -100,14 +94,26 @@ async function determineInitialAction(
      - "cancel": If the user wants to cancel the current request or start over.
      - "interruption": If the user's query is unrelated to the leave request process or answer greeting and general Questions or If the user is asking about the policy related to leave requests or anything related to self validation like "Can I apply for this leave type?" or you feel like the answer is not related to the leave request but related to HR policies or any questions related to DMCC Company.
 
-  Remember: Your response must be ONLY one of the above actions. Do not provide any explanations or additional text. We are handling only one leave request at a time.`;
+  Remember: Your response must be ONLY one of the above actions. Do not provide any explanations or additional text. We are handling only one leave request at a time.
+<|eot_id|>`;
 
-	const prompt = `User Query: ${userMessage}
+	const prompt = `<|begin_of_text|><|start_header_id|>User Query<|end_header_id|>
+	User Query: ${userMessage}
+	<|eot_id|>
+	<|start_header_id|>Prompt That was provided to User<|end_header_id|>
     Prompt That was provided to User: ${ctxManager.getTestResponse()}
+	<|eot_id|>
+	<|start_header_id|>Extracted Information and Previous Action<|end_header_id|>
     Extracted Information: ${JSON.stringify(extractedInfo)}
     Previous Action: ${previousAction}
+	<|eot_id|>
+	<|start_header_id|>Conversation History<|end_header_id|>
+    Conversation History: ${ctxManager.getConversationHistory()}
+	<|eot_id|>
 
-  Based on the user query, extracted information, previous action, user profile, and conversation history, determine the next action for the current leave request, user profile inquiry, or potential interruption.`;
+	<|start_header_id|>NOTE<|end_header_id|>
+  Based on the user query, extracted information, previous action, user profile, and conversation history, determine the next action for the current leave request, user profile inquiry, or potential interruption.
+	<|eot_id|>`;
 
 	logger.info('determineInitialAction: Sending chat request');
 	const useLlama = ctxManager.getUseLlama();

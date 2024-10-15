@@ -1,6 +1,6 @@
 {
   "name": "oda_genai_func",
-  "version": "0.0.2",
+  "version": "0.0.4",
   "description": "Oracle Digital Assistant Component Package",
   "main": "main.js",
   "scripts": {

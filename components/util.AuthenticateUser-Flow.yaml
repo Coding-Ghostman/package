@@ -1,0 +1,515 @@
+name: "util.AuthenticateUser"
+trackingId: "39BBC3D5-DE26-4200-B75C-E754B95DC740"
+type: "task"
+version: "2.0"
+public: true
+interface:
+  inputParameters:
+  - name: "testUser"
+    description: "needed for user impersonation"
+    type: "string"
+    required: false
+    metadata:
+      isFreeMarker: true
+    trackingId: "364cacfa-d9b2-48cb-9a3e-96d126059932"
+  returnActions:
+  - "fail"
+  - "success"
+  - "done"
+configuration:
+  requiresAuthorization: false
+variables:
+- name: "env"
+  type: "map"
+  description: ""
+  metadata:
+    isFreeMarker: false
+  system: false
+- name: "usernameResponse"
+  type: "map"
+  description: ""
+  metadata:
+    isFreeMarker: false
+  system: false
+defaultTransitions:
+  actions:
+    permissionError: "permissionError"
+    clientError: "clientOrServerError"
+    system.startTaskFlow: "saveChannelName"
+    serverError: "clientOrServerError"
+states:
+  getImpersonatedUsername:
+    component: "System.SetVariable"
+    properties:
+      variable: "user.username"
+      value: "${(((user.testUser)!'')!='')?then(user.testUser,(((testUser.value)!'')!='')?then(testUser.value,skill.system.config.da.impersonatedUser))}"
+    transitions:
+      next: "generateAccessToken"
+    metadata:
+      propertySheetIsFreeMarkerMap:
+        variable: false
+        value: true
+        requiresAuthorization: false
+  getWorkerDetails:
+    component: "Northwell.Utils:GetWorkerDetails"
+    properties:
+      username: "${user.username.value}"
+    transitions:
+      actions:
+        fail: "oAuthFailNH"
+        noLoggedInUser: "noLoggedInUser"
+        success: "setUserVariables"
+        authFail: "oAuthFail"
+      next: "oAuthFail"
+    metadata:
+      propertySheetIsFreeMarkerMap:
+        targetVariable: true
+        responseVariableName: true
+        thumbprint: true
+        FAKey: true
+        issuer: true
+        username: true
+        requiresAuthorization: false
+  returnFail:
+    component: "System.EndFlow"
+    properties:
+      action: "fail"
+      actionValues: []
+      outputParameters: {}
+    transitions: {}
+    metadata:
+      propertySheetIsFreeMarkerMap:
+        action: true
+        actionValues: false
+        keepTurn: false
+  setCustomMetrics:
+    component: "System.SetCustomMetrics"
+    properties:
+      dimensions:
+      - name: "username"
+        value: "${user.username}"
+    transitions:
+      next: "returnSuccess"
+    metadata:
+      propertySheetIsFreeMarkerMap:
+        requiresAuthorization: false
+  setAuthFromTokenTrue:
+    component: "System.SetVariable"
+    properties:
+      variable: "user.authFromToken"
+      value: "true"
+    transitions:
+      next: "getWorkerDetails"
+    metadata:
+      propertySheetIsFreeMarkerMap:
+        variable: false
+        value: true
+        requiresAuthorization: false
+  endFlow:
+    component: "System.EndFlow"
+    properties:
+      action: "done"
+    transitions: {}
+    metadata: {}
+  checkTokenValidity:
+    component: "Northwell.Utils:CheckTokenValidity"
+    properties:
+      token: "${(user.oAuthToken)!''}"
+      username: "${(user.username)!''}"
+    transitions:
+      actions:
+        valid: "setAuthFromTokenTrue"
+        invalid: "getTeamsToken"
+      next: "getTeamsToken"
+    metadata:
+      propertySheetIsFreeMarkerMap:
+        token: true
+        username: true
+        requiresAuthorization: false
+  checkIDCSOAuthForFA:
+    component: "System.Switch"
+    properties:
+      source: "${skill.system.security.configuredAuthenticationServices?contains(\"IDCS_OAuthForFA\")?then('oAuth','notOAuth')}"
+    transitions:
+      actions:
+        notOAuth: "oAuthFail"
+        oAuth: "oauth2AccountLink"
+    metadata:
+      propertySheetIsFreeMarkerMap:
+        variable: false
+        source: true
+        requiresAuthorization: false
+  getEnvironmentVariables:
+    component: "System.CallRestService"
+    properties:
+      authConfigType: "noAuth"
+      restService: "ODAEnvironment"
+      endpoint: "https://www.northwell.edu"
+      responseConfig: "useMock"
+      requestHeaders: []
+      method: "GET"
+      requestParameters: []
+      resultVariable: "env"
+    transitions:
+      next: "saveEnvironmentVariables"
+    metadata:
+      propertySheetIsFreeMarkerMap:
+        authConfigType: false
+        restService: false
+        endpoint: false
+        responseConfig: false
+        method: false
+        requestBody: false
+        apiKeyValueVariable: false
+        passwordVariable: false
+        tokenVariable: false
+        resultVariable: false
+        requiresAuthorization: false
+  checkResponse:
+    component: "System.Switch"
+    properties:
+      source: "${((((usernameResponse.value.responsePayload.count)!0)?number) gt 0)?c}"
+    transitions:
+      actions:
+        "true": "saveUsername"
+        "false": "oAuthFailNH"
+    metadata:
+      propertySheetIsFreeMarkerMap:
+        variable: false
+        source: true
+        requiresAuthorization: false
+  oAuthFailNH:
+    component: "System.CommonResponse"
+    properties:
+      metadata:
+        responseItems:
+        - text: "${rb('authError.NH')}"
+          type: "text"
+      keepTurn: true
+    transitions:
+      next: "returnFail"
+    metadata:
+      virtualComponent: "Virtual.Output"
+      propertySheetIsFreeMarkerMap:
+        requiresAuthorization: false
+  getUsername:
+    component: "System.CallRestService"
+    properties:
+      authConfigType: "bearerToken"
+      restService: "getUsernameFromEmail"
+      endpoint: "https://eppr-dev1.fa.us2.oraclecloud.com/hcmRestApi/resources/11.13.18.05/publicWorkers?onlyData=true&q=upper(WorkEmail)%20like%20upper(%27{email}%25%27)%20or%20upper(Username)=upper(%27{emailUsername}%27)"
+      responseConfig: "apiResponse"
+      requestHeaders: []
+      method: "GET"
+      requestParameters:
+      - type: "path"
+        value: "${user.username?keep_before('@')}"
+        key: "emailUsername"
+      - type: "path"
+        value: "${user.username}"
+        key: "email"
+      resultVariable: "usernameResponse"
+    transitions:
+      actions:
+        success: "checkResponse"
+        failure: "RESTCallFailed"
+    metadata:
+      propertySheetIsFreeMarkerMap:
+        authConfigType: false
+        requestParameters--Item--type: false
+        restService: false
+        endpoint: false
+        responseConfig: false
+        method: false
+        requestBody: false
+        apiKeyValueVariable: false
+        passwordVariable: false
+        tokenVariable: false
+        resultVariable: false
+        requiresAuthorization: false
+  permissionError:
+    component: "System.CommonResponse"
+    properties:
+      metadata:
+        responseItems:
+        - text: "${rb.permissionsError}"
+          type: "text"
+      keepTurn: true
+    transitions:
+      next: "returnFail"
+    metadata:
+      virtualComponent: "Virtual.Output"
+      propertySheetIsFreeMarkerMap:
+        requiresAuthorization: false
+  saveEnvironmentVariables:
+    component: "System.SetVariable"
+    properties:
+      variable: "user.env"
+      value: "${env.value.responsePayload}"
+    transitions:
+      next: "checkForImpersonation"
+    metadata:
+      propertySheetIsFreeMarkerMap:
+        variable: false
+        value: true
+        requiresAuthorization: false
+  checkForTeams:
+    component: "System.Switch"
+    properties:
+      source: "${system.channelType}"
+    transitions:
+      actions:
+        msteams: "doesTokenExist"
+      next: "checkIDCSOAuthForFA"
+    metadata:
+      propertySheetIsFreeMarkerMap:
+        variable: false
+        source: true
+        requiresAuthorization: false
+  generateAccessToken:
+    component: "Northwell.Utils:GenerateAuthToken"
+    properties:
+      responseVariableName: "user.oAuthToken"
+      thumbprint: "${skill.system.config.da.FACertThumbprint}"
+      FAKey: "${skill.system.config.da.privateKeyforFA}"
+      issuer: "${skill.system.config.da.FAKeyIssuer}"
+      username: "${user.username.value}"
+    transitions:
+      actions:
+        success: "setAuthFromTokenTrue"
+        failure: "checkIDCSOAuthForFA"
+    metadata:
+      propertySheetIsFreeMarkerMap:
+        listVariable: true
+        headerText: true
+        responseVariableName: true
+        cardHeaderTemplate: true
+        thumbprint: true
+        actionURL: true
+        actionKeywords: true
+        issuer: true
+        actionLabel: true
+        actionType: true
+        targetVariable: true
+        itemsPerCard: false
+        FAKey: true
+        username: true
+        requiresAuthorization: false
+  doesTokenExist:
+    component: "System.Switch"
+    properties:
+      source: "${((user.oAuthToken)?? && (user.username)??)?c}"
+    transitions:
+      actions:
+        "false": "getTeamsToken"
+        "true": "checkTokenValidity"
+      next: "getTeamsToken"
+    metadata:
+      propertySheetIsFreeMarkerMap:
+        variable: false
+        source: true
+        requiresAuthorization: false
+  saveUsername:
+    component: "System.SetVariable"
+    properties:
+      variable: "user.username"
+      value: "${usernameResponse.value.responsePayload.items[0].Username}"
+    transitions:
+      next: "generateAccessToken"
+    metadata:
+      propertySheetIsFreeMarkerMap:
+        variable: false
+        value: true
+        requiresAuthorization: false
+  saveChannelName:
+    component: "System.SetVariable"
+    properties:
+      variable: "user.channelName"
+      value: "${system.message.channelConversation.channelName}"
+    transitions:
+      next: "getEnvironmentVariables"
+    metadata:
+      propertySheetIsFreeMarkerMap:
+        variable: false
+        value: true
+        requiresAuthorization: false
+  checkForImpersonation:
+    component: "System.Switch"
+    properties:
+      source: "${((skill.system.config.da.enableImpersonation == 'true') && (system.message.channelConversation.channelType=='test'))?then('true','false')}"
+    transitions:
+      actions:
+        "true": "getImpersonatedUsername"
+        "false": "checkForChannelAuthentication"
+    metadata:
+      propertySheetIsFreeMarkerMap:
+        variable: false
+        source: true
+        requiresAuthorization: false
+  oauth2AccountLink:
+    component: "System.OAuth2AccountLink"
+    properties:
+      authenticationService: "IDCS_OAuthForFA"
+      showCancelOption: true
+      updateUserProfile: false
+      requiresAssociationConsent: "yes"
+      enableSingleSignOn: false
+      authenticatedUserVariableName: "user.username"
+      accessTokenVariableName: "user.oAuthToken"
+    transitions:
+      actions:
+        fail: "oAuthFail"
+        pass: "setAuthFromTokenTrue"
+    metadata:
+      propertySheetIsFreeMarkerMap:
+        redirectUri: true
+        showCancelOption: false
+        multiScopeAccessTokensVariableName: false
+        footerText: true
+        updateUserProfile: false
+        requiresAssociationConsent: true
+        enableSingleSignOn: false
+        associateWithUnifiedUser: false
+        authenticatedUserVariableName: false
+        accessTokenVariableName: false
+  checkForChannelAuthentication:
+    component: "System.Switch"
+    properties:
+      source: "${((profile.properties.value.accessToken!)?has_content && (profile.properties.value.principal!)?has_content)?then('authenticated','notAuthenticated')}"
+    transitions:
+      actions:
+        authenticated: "setTokenFromWebChannel"
+        notAuthenticated: "checkForTeams"
+    metadata:
+      propertySheetIsFreeMarkerMap:
+        variable: false
+        source: true
+        requiresAuthorization: false
+  oAuthFail:
+    component: "System.CommonResponse"
+    properties:
+      metadata:
+        responseItems:
+        - text: "${rb.authError}"
+          type: "text"
+      keepTurn: true
+    transitions:
+      next: "returnFail"
+    metadata:
+      virtualComponent: "Virtual.Output"
+      propertySheetIsFreeMarkerMap:
+        requiresAuthorization: false
+  clientOrServerError:
+    component: "System.CommonResponse"
+    properties:
+      metadata:
+        responseItems:
+        - text: "${rb.serverErrorMsg}"
+          type: "text"
+      keepTurn: true
+    transitions:
+      next: "returnFail"
+    metadata:
+      virtualComponent: "Virtual.Output"
+      propertySheetIsFreeMarkerMap:
+        requiresAuthorization: false
+  getTeamsToken:
+    component: "System.OAuth2AccountLink"
+    properties:
+      authenticationService: "Northwell_Microsoft_Service"
+      showCancelOption: true
+      updateUserProfile: false
+      requiresAssociationConsent: "yes"
+      enableSingleSignOn: true
+      authenticatedUserVariableName: "user.username"
+      accessTokenVariableName: "user.teamsAccessToken"
+    transitions:
+      actions:
+        fail: "oAuthFail"
+        system.textReceived: "endFlow"
+        pass: "getUsername"
+    metadata:
+      propertySheetIsFreeMarkerMap:
+        redirectUri: true
+        showCancelOption: false
+        multiScopeAccessTokensVariableName: false
+        footerText: true
+        updateUserProfile: false
+        requiresAssociationConsent: true
+        enableSingleSignOn: false
+        authenticatedUserVariableName: false
+        accessTokenVariableName: false
+  RESTCallFailed:
+    component: "System.CommonResponse"
+    properties:
+      metadata:
+        responseItems:
+        - text: "${rb.RESTCallFailed}"
+          type: "text"
+      keepTurn: true
+    transitions: {}
+    metadata:
+      virtualComponent: "Virtual.Output"
+      propertySheetIsFreeMarkerMap:
+        requiresAuthorization: false
+  setUserVariables:
+    component: "System.InvokeFlow"
+    properties:
+      inputParameters: []
+      flow: "util.setUserVariables"
+      outputParameters: []
+    transitions:
+      next: "setCustomMetrics"
+    metadata:
+      propertySheetIsFreeMarkerMap:
+        flow: false
+  noLoggedInUser:
+    component: "System.CommonResponse"
+    properties:
+      metadata:
+        responseItems:
+        - text: "${rb.permissionsError}"
+          type: "text"
+      keepTurn: true
+    transitions:
+      next: "returnFail"
+    metadata:
+      virtualComponent: "Virtual.Output"
+      propertySheetIsFreeMarkerMap:
+        requiresAuthorization: false
+  setUsernameFromWebChannel:
+    component: "System.SetVariable"
+    properties:
+      variable: "user.username"
+      value: "${profile.properties.value.principal}"
+    transitions:
+      next: "setAuthFromTokenTrue"
+    metadata:
+      propertySheetIsFreeMarkerMap:
+        variable: false
+        value: true
+        requiresAuthorization: false
+  returnSuccess:
+    component: "System.EndFlow"
+    properties:
+      action: "success"
+      actionValues: []
+      outputParameters: {}
+    transitions: {}
+    metadata:
+      propertySheetIsFreeMarkerMap:
+        action: true
+        actionValues: false
+        keepTurn: false
+  setTokenFromWebChannel:
+    component: "System.SetVariable"
+    properties:
+      variable: "user.oAuthToken"
+      value: "${profile.properties.value.accessToken}"
+    transitions:
+      next: "setUsernameFromWebChannel"
+    metadata:
+      propertySheetIsFreeMarkerMap:
+        variable: false
+        value: true
+        requiresAuthorization: false

@@ -3,7 +3,7 @@ async function chat(message, options = {}) {
 	const fetch = require('node-fetch');
 	const { Headers } = fetch;
 
-	const configurationFilePath = '/home/fn/.oci/config';
+	const configurationFilePath = '/function/package/config/config';
 	// const configurationFilePath = '~/.oci_dmcc/config';
 	const configProfile = 'DEFAULT';
 
@@ -18,7 +18,7 @@ async function chat(message, options = {}) {
 		maxTokens = 600,
 		isStream = false,
 		apiFormat = 'COHERE',
-		frequencyPenalty = 1.0,
+		frequencyPenalty = 0.5,
 		presencePenalty = 0,
 		temperature = 0,
 		topP = 0.5,
@@ -32,8 +32,9 @@ async function chat(message, options = {}) {
 	// Create a context section from docs
 	const contextSection =
 		docs.length > 0
-			? '\n\nContext:\n' +
-			  docs.map((doc) => `${doc.title}: ${doc.text}`).join('\n')
+			? `<|begin_of_text|><|start_header_id|>Context<|end_header_id|>${docs
+					.map((doc) => `${doc.title}: ${doc.text}`)
+					.join('\n')}<|eot_id|>`
 			: '';
 	const history = chatHistory.map(({ role, message }) => ({
 		role: role === 'CHATBOT' ? 'ASSISTANT' : role.toUpperCase(),
@@ -41,16 +42,25 @@ async function chat(message, options = {}) {
 	}));
 
 	// Combine preamble, context, and message
-	const fullMessage = `LEAVE CONTEXT: ${
+	const fullMessage = `<|begin_of_text|><|start_header_id|>LEAVE CONTEXT<|end_header_id|>${
 		contextSection || 'No Context for now'
-	}\n\nCONVERSATION HISTORY: ${JSON.stringify(history)}\n\n${message}`;
+	}\n\n${message}`;
 	const systemMessage = {
 		role: 'SYSTEM',
 		content: [{ type: 'TEXT', text: preambleOverride }],
 	};
-	console.log('contextSection', contextSection);
-	console.log('history', history);
-	console.log('fullMessage', fullMessage);
+	console.log('preambleOverride', preambleOverride);
+	console.log('Messages', [
+		{
+			role: 'SYSTEM',
+			content: [{ type: 'TEXT', text: preambleOverride }],
+		},
+		...history,
+		{
+			role: 'USER',
+			content: [{ type: 'TEXT', text: fullMessage }],
+		},
+	]);
 
 	// 1. Create Request Signing instance
 	const signer = new common.DefaultRequestSigner(provider);
@@ -73,7 +83,11 @@ async function chat(message, options = {}) {
 					},
 					chatRequest: {
 						messages: [
-							systemMessage,
+							{
+								role: 'SYSTEM',
+								content: [{ type: 'TEXT', text: preambleOverride }],
+							},
+							...history,
 							{
 								role: 'USER',
 								content: [{ type: 'TEXT', text: fullMessage }],
@@ -121,7 +135,7 @@ async function chat(message, options = {}) {
 	};
 	// 3. sign request
 	console.log('****************************');
-	console.log('httpRequest', httpRequest.body);
+	console.log('httpRequest', httpRequest);
 	console.log('****************************');
 	await signer.signHttpRequest(httpRequest);
 

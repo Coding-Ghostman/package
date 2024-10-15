@@ -34,8 +34,7 @@ module.exports = {
 			? leaveTypeConfig.mandatoryParams
 			: [];
 
-		const confirmationPreamble = `
-You are Aisha, a friendly and helpful HR colleague in the HR department.  Your task is to generate a final confirmation message for the user's leave request and inform them that their request has been submitted.
+		const confirmationPreamble = `You are Aisha, a friendly and helpful HR colleague in the HR department.  Your task is to generate a final confirmation message for the user's leave request and inform them that their request has been submitted.
 
 Instructions:
 1. Confirm that the leave request has been successfully submitted.
@@ -44,17 +43,16 @@ Instructions:
 4. Keep the overall tone warm, approachable, and professional.
 5. Limit your response to 10 words or less.
 6. Check the Conversation History to have the context before sending the confirmation message.
-`;
+7. Don't add any formatting like JSON or code blocks or double quotes.
+8. Just send the confirmation message.`;
 
-		const prompt = `
-Extracted Info: ${JSON.stringify(extractedInfo)}
+		const prompt = `Extracted Info: ${JSON.stringify(extractedInfo)}
 User Message: ${userMessage}
 Formatted Start Date: ${formattedStartDate}
 Formatted End Date: ${formattedEndDate}
 Mandatory Parameters: ${JSON.stringify(mandatoryParams)}
 
-Generate a final confirmation message for the leave request, informing the user that their request has been submitted.
-`;
+Generate a final confirmation message for the leave request, informing the user that their request has been submitted.`;
 		const useLlama = ctxManager.getUseLlama();
 		const chatResponse = await chat(prompt, {
 			maxTokens: 200,
@@ -80,13 +78,13 @@ Generate a final confirmation message for the leave request, informing the user 
 		// Prepare request body
 		const requestBody = {
 			personNumber: userProfile.personNumber,
-			legalEntityId: userProfile.legalEntityId,
+			legalEntityId: 300000002024060,
 			absenceType: extractedInfo.leaveType,
 			startDateDuration: extractedInfo.startDayType ? 1 : 0.5,
 			endDateDuration: extractedInfo.endDayType ? 1 : 0.5,
 			startDate: extractedInfo.startDate,
 			endDate: extractedInfo.endDate,
-			absenceStatusCd: 'SAVED',
+			absenceStatusCd: 'SUBMITTED',
 			absenceRecordingDFF: [
 				{
 					__FLEX_Context: '300000009102443',
@@ -100,13 +98,13 @@ Generate a final confirmation message for the leave request, informing the user 
 				},
 			],
 		};
-
+		logger.info('Confirmation_LLM: Request Body:', requestBody);
 		// Submit the leave request
 		const submissionResult = await submitLeaveRequest(requestBody, {
-			username: process.env.HRMS_USERNAME || 'testuser1@conneqtiongroup.com',
+			username: process.env.HRMS_USERNAME || 'dmcc_integration',
 			password: process.env.HRMS_PASSWORD || 'DMCC@1234',
 		});
-
+		logger.info('Confirmation_LLM: Submission Result:', submissionResult);
 		if (submissionResult.success) {
 			logger.info('Confirmation_LLM: Leave request submitted successfully');
 			// You might want to add some information to the context or send a success message to the user

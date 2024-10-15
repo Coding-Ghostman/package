@@ -17,11 +17,14 @@ async function submitLeaveRequest(requestBody, auth) {
 		});
 
 		if (response.status === 200 || response.status === 201) {
+			console.log(response.data);
 			return {
 				success: true,
-				data: response.data,
+				data: response,
 			};
 		} else {
+			console.log(response);
+
 			throw new Error(`Request failed with status code ${response.status}`);
 		}
 	} catch (error) {
