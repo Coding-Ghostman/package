@@ -3,8 +3,8 @@ async function chat(message, options = {}) {
 	const fetch = require('node-fetch');
 	const { Headers } = fetch;
 
-	const configurationFilePath = '/function/package/config/config';
-	// const configurationFilePath = '~/.oci_dmcc/config';
+	// const configurationFilePath = '/function/package/config/config';
+	const configurationFilePath = '~/.oci_dmcc/config';
 	const configProfile = 'DEFAULT';
 
 	const provider = new common.ConfigFileAuthenticationDetailsProvider(

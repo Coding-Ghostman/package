@@ -20,24 +20,24 @@ class CalendarTool {
 4. If User mentions a date range, then check for the starting date and ending date, if they are weekends, adjust them to the next available weekdays.
 5. The "first week" of a month starts on the first Monday of that month and ends on the following Friday.
 6. If a date falls on a weekend, adjust it to the next available weekday.
-5. For multi-day leave periods, always start on a Monday and end on a Friday.
-6. DO NOT assume any dates if they are not explicitly mentioned in the query.
-7. If the query is about a future month or week, make sure to interpret it correctly.
-8. If no specific dates or relative time periods are mentioned, return null for both interpretedStartDate and interpretedEndDate.
-9. If MULTIPLE LEAVES ARE MENTIONED AND IT CREATES AMBIGUITY, WHERE BOTH THE DATES CAN BE USED FOR A SINGLE DATE PARAMETER, ADD BOTH THE DATES IN AN ARRAY.s
+7. For multi-day leave periods, always start on a Monday and end on a Friday.
+8. DO NOT assume any dates if they are not explicitly mentioned in the query.
+9. If the query is about a future month or week, make sure to interpret it correctly.
+10. If no specific dates or relative time periods are mentioned, return null for both interpretedStartDate and interpretedEndDate.
+11. If MULTIPLE LEAVES ARE MENTIONED AND IT CREATES AMBIGUITY, WHERE BOTH THE DATES CAN BE USED FOR A SINGLE DATE PARAMETER, ADD BOTH THE DATES IN AN ARRAY.s
 <<INSTRUCTIONS>>
 <|eot_id|>
 <|begin_of_text|><|start_header_id|>INTERPRETATION JSON<|end_header_id|>
 Provide the interpretation in the following JSON format Strictly follow it, and provide all the keys inside double quotes:
 {
-  "originalStartDate": "YYYY-MM-DD" or null, <- The original start date from the user query
-  "originalEndDate": "YYYY-MM-DD" or null, <- The original end date from the user query
-  "interpretedStartDate": "YYYY-MM-DD" or ["YYYY-MM-DD", "YYYY-MM-DD"], <- The interpreted start date
-  "interpretedEndDate": "YYYY-MM-DD" or ["YYYY-MM-DD", "YYYY-MM-DD"], <- The interpreted end date
+  "originalStartDate": "YYYY-MM-DD (Weekday Name)" or null, <- The original start date from the user query
+  "originalEndDate": "YYYY-MM-DD (Weekday Name)" or null, <- The original end date from the user query
+  "interpretedStartDate": "YYYY-MM-DD (Weekday Name)", <- The interpreted start date
+  "interpretedEndDate": "YYYY-MM-DD (Weekday Name)", <- The interpreted end date
   "description": "Brief description of the interpreted date range", <- A brief description of the interpreted date range
   "relativeDate": "Relative description if applicable (e.g., 'next Monday', 'first week of next month')", <- A relative description if applicable
-  "adjustedStartDate": "YYYY-MM-DD" or null, <- The adjusted start date
-  "adjustedEndDate": "YYYY-MM-DD" or null <- The adjusted end date
+  "adjustedStartDate": "YYYY-MM-DD (Weekday Name)", <- The adjusted start date
+  "adjustedEndDate": "YYYY-MM-DD (Weekday Name)", <- The adjusted end date
 }
 <|eot_id|>`;
 		const prompt = `${calendarPreamble}
