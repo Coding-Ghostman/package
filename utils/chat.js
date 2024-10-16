@@ -44,7 +44,7 @@ async function chat(message, options = {}) {
 	// Combine preamble, context, and message
 	const fullMessage = `<|begin_of_text|><|start_header_id|>LEAVE CONTEXT<|end_header_id|>${
 		contextSection || 'No Context for now'
-	}\n\n${message}`;
+	}<|eot_id|>\n\n${message}`;
 	const systemMessage = {
 		role: 'SYSTEM',
 		content: [{ type: 'TEXT', text: preambleOverride }],

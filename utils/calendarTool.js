@@ -86,7 +86,8 @@ ${calendarContext}
 		const calendarPreamble = `<|begin_of_text|><|start_header_id|>System<|end_header_id|>
 <<INSTRUCTIONS>>
 1. Determine the year and months to be used for the calendar based on the user's query.
-2. Return the year and months in the following JSON format:
+2. If a single date is mentioned, then that month and the next month should be considered.
+3. Return the year and months in the following JSON format:
 {
 	"year": 2024,
 	"months": [10, 11]
@@ -121,7 +122,7 @@ ${calendarContext}
 					.replace(/\\n/g, '')
 					.trim();
 			console.log(
-				'rawContent',
+				'Calendar Tool: rawContent',
 				chatResponse.chatResponse.choices[0].message.content[0].text
 			);
 			jsonString = extractJsonObject(rawContent);
@@ -132,7 +133,7 @@ ${calendarContext}
 				.replace(/\\n/g, '')
 				.trim();
 		}
-
+		console.log('Calendar Tool: jsonString', jsonString);
 		const { year, months } = JSON.parse(jsonString);
 
 		return this.generateCalendar({ year, months });
@@ -227,9 +228,6 @@ ${calendarContext}
 			relativeDate: interpretation.relativeDate,
 			needsClarification: interpretation.needsClarification,
 			clarificationMessage: interpretation.clarificationMessage,
-			weekendAdjustment: this.processWeekendAdjustment(
-				interpretation.weekendAdjustment
-			),
 			isWeekday: {
 				originalStartDate: this.isWeekday(interpretation.originalStartDate),
 				originalEndDate: this.isWeekday(interpretation.originalEndDate),
@@ -242,12 +240,12 @@ ${calendarContext}
 			},
 		};
 
-		if (response.interpretedStartDate && response.interpretedEndDate) {
-			response.workingDays = this.getWorkingDays(
-				response.interpretedStartDate,
-				response.interpretedEndDate
-			);
-		}
+		// if (response.interpretedStartDate && response.interpretedEndDate) {
+		// 	response.workingDays = this.getWorkingDays(
+		// 		response.interpretedStartDate,
+		// 		response.interpretedEndDate
+		// 	);
+		// }
 
 		return response;
 	}

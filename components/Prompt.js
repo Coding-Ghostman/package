@@ -106,13 +106,7 @@ Remember:
 				);
 				const nextParam = missingMandatoryParams[0];
 				logger.info('Prompt_LLM: nextParam', nextParam);
-				prompt = `<|begin_of_text|><|start_header_id|>context<|end_header_id|>
-
-<<User Query>> "${userQuery}"<<User Query>>
-Current leave details: ${JSON.stringify(extractedInfo)}
-Date info: ${JSON.stringify(dateInfo)}
-<<CONTEXT>>
-
+				prompt = `<|begin_of_text|><|start_header_id|>System<|end_header_id|>
 <<INSTRUCTIONS>>
 We're helping the user with their ${
 					extractedInfo.leaveType
@@ -126,23 +120,27 @@ Remember:
 - If the user mentions a date in the past, adjust it to the next available weekday.
 - If the user mentions a date range, then check for the starting date and ending date, if they are weekends, adjust them to the next available weekdays.
 <<INSTRUCTIONS>>
+<|eot_id|> 
+<|begin_of_text|><|start_header_id|>USER CONTEXT<|end_header_id|><<User Query>> "${userQuery}"<<User Query>>
+Current leave details: ${JSON.stringify(extractedInfo)}
+Date info: ${JSON.stringify(dateInfo)}
+<<CONTEXT>>
 <|eot_id|>`;
+			} else {
+				prompt = `<|begin_of_text|><|start_header_id|>System<|end_header_id|>
+			<<INSTRUCTIONS>>
+			- Ask the user for confirmation of the leave details. Keep your response concise, around 10 words or less.
+			- Provide all the information you have collected and ask the user for confirmation.
+			<<INSTRUCTIONS>>
+			<|eot_id|>
+			<|begin_of_text|><|start_header_id|>USER CONTEXT<|end_header_id|>
+			<<User Query>> "${userQuery}"<<User Query>>
+			<<Current leave details>> ${JSON.stringify(
+				extractedInfo
+			)}<<Current leave details>>
+			<<Date info>> ${JSON.stringify(dateInfo)}<<Date info>>
+			<|eot_id|>`;
 			}
-			// else {
-			// 				prompt = `
-			// <|begin_of_text|><|start_header_id|>context<|end_header_id|>
-
-			// <<User Query>> "${userQuery}"<<User Query>>
-			// <<Current leave details>> ${JSON.stringify(
-			// 					extractedInfo
-			// 				)}<<Current leave details>>
-			// <<Date info>> ${JSON.stringify(dateInfo)}<<Date info>>
-
-			// <<INSTRUCTIONS>>
-			// Ask the user for confirmation of the leave details. Keep your response concise, around 10 words or less.
-			// <<INSTRUCTIONS>>
-			// <|eot_id|>`;
-			// 			}
 		}
 		const useLlama = ctxManager.getUseLlama();
 		logger.info('Prompt_LLM: prompt Llama', prompt);
@@ -160,11 +158,11 @@ Remember:
 		ctxManager.setTestResponse(result);
 		ctxManager.reply(result.replace(/"/g, ''));
 
-		if (ctxManager.isLeaveRequestComplete()) {
-			ctxManager.transition('summary');
-		} else {
-			ctxManager.transition('router');
-		}
+		// if (ctxManager.isLeaveRequestComplete()) {
+		// 	ctxManager.transition('summary');
+		// } else {
+		ctxManager.transition('router');
+		// }
 
 		ctxManager.addToConversationHistory('CHATBOT', result);
 
